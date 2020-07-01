@@ -1,0 +1,25 @@
+{
+  "port": 8080, // Port to listen on
+  "databaseUrl": "postgresql://127.0.0.1:5432/vaulth", // Database connection url
+  "userAgent": "vaulth", // User-Agent header to use when interacting with external providers (Optional)
+  "logLevel": "INFO", // Minimum log level used for filtering log messages (Optional)
+  // JWT tokens configuration
+  "token": {
+    "key": "SuperSecretKey", // Key used for signing and verifying tokens
+    "duration": 10000 // Duration for which generated tokens stay valid, in minutes
+  },
+  // (Optional)
+  "tls": {
+    "cert": "cert.pem", // Certificate file
+    "key": "key.rsa" // Key file
+  },
+  // Argon2 hashing configuration, defaults to reasonable values
+  "hash": {
+    "hashLen": 32, // Length of the password hash (Optional)
+    "saltLen": 16, // Length of the random salt (Optional)
+    "lanes": 1, // Number of lanes used for parallelism (Optional)
+    "memCost": 4096, // Amount of memory used, in KB (Optional)
+    "time_cost": 4, // Number of passes (Optional)
+    "secret": "SuperSecretSecret" // Custom secret, for additional security (Optional)
+  }
+}

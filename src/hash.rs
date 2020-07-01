@@ -1,5 +1,5 @@
 use crate::config::HashConfig;
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use argon2::{Config, ThreadMode, Variant, Version};
 use rand::{rngs::OsRng, Rng};
 use tokio::task;
@@ -52,7 +52,14 @@ fn hash_sync<'a>(
 
     config.secret = secret;
 
-    Ok(argon2::hash_encoded(&password, &salt, &config)?)
+    let hash = argon2::hash_encoded(&password, &salt, &config)?;
+    if hash.len() > 255 {
+        return Err(anyhow!(
+            "hash length exceeds maximum length supported in the database"
+        ));
+    }
+
+    Ok(hash)
 }
 
 /// Verifies a password hash
