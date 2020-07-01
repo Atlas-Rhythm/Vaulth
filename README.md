@@ -28,7 +28,7 @@ If no config file is specified, it defaults to `vaulth.json`.
 
 ## Configuration
 
-See [example](vaulth.example.json) (the comments are present for clarity only, parsing will fail if the config file contains comments).
+See [example](vaulth.example.json5) (the comments are present for clarity only, parsing will fail if the config file uses JSON5).
 
 ## Building
 
