@@ -6,17 +6,16 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use tokio::task;
 
 #[derive(Serialize, Deserialize)]
-pub struct Claims<T> {
+struct Claims<T> {
     #[serde(with = "chrono_jwt")]
     exp: DateTime<Utc>,
     #[serde(with = "chrono_jwt")]
     iat: DateTime<Utc>,
-    sub: String,
     data: T,
 }
 
 /// Encodes and returns a JWT for the specified user
-pub async fn encode<T>(user: String, config: &TokenConfig, data: T) -> Result<String>
+pub async fn encode<T>(data: T, config: &TokenConfig) -> Result<String>
 where
     T: Send + Serialize + 'static,
 {
@@ -24,9 +23,9 @@ where
 
     let duration = Duration::minutes(config.duration);
     let key = EncodingKey::from_secret(config.key.as_bytes());
-    Ok(task::spawn_blocking(move || encode_sync(user, duration, key, data)).await??)
+    Ok(task::spawn_blocking(move || encode_sync(data, duration, key)).await??)
 }
-fn encode_sync<T>(sub: String, duration: Duration, key: EncodingKey, data: T) -> Result<String>
+fn encode_sync<T>(data: T, duration: Duration, key: EncodingKey) -> Result<String>
 where
     T: Serialize,
 {
@@ -36,7 +35,6 @@ where
         &Claims {
             exp: now + duration,
             iat: now,
-            sub,
             data,
         },
         &key,
@@ -44,7 +42,7 @@ where
 }
 
 /// Decodes a JWT and returns the user it refers to if valid
-pub async fn decode<T>(token: String, config: &TokenConfig) -> Result<Option<Claims<T>>>
+pub async fn decode<T>(token: String, config: &TokenConfig) -> Result<Option<T>>
 where
     T: Send + DeserializeOwned + 'static,
 {
@@ -53,7 +51,7 @@ where
     let key = config.key.as_bytes().to_vec();
     Ok(task::spawn_blocking(move || decode_sync(token, key)).await??)
 }
-fn decode_sync<T>(token: String, key: Vec<u8>) -> Result<Option<Claims<T>>>
+fn decode_sync<T>(token: String, key: Vec<u8>) -> Result<Option<T>>
 where
     T: DeserializeOwned,
 {
@@ -62,7 +60,7 @@ where
         &DecodingKey::from_secret(&key),
         &Default::default(),
     ) {
-        Ok(data) => Ok(Some(data.claims)),
+        Ok(data) => Ok(Some(data.claims.data)),
         Err(e) => match e.kind() {
             ErrorKind::InvalidKeyFormat | ErrorKind::Crypto(_) => Err(e.into()),
             _ => Ok(None),

@@ -13,6 +13,9 @@ pub struct Config {
     pub token: TokenConfig,
     pub tls: Option<TlsConfig>,
     pub hash: HashConfig,
+    pub root_uri: String,
+
+    pub google: Option<OAuth2Config>,
 }
 
 #[derive(Deserialize)]
@@ -38,6 +41,13 @@ pub struct HashConfig {
     pub mem_cost: Option<u32>,
     pub time_cost: Option<u32>,
     pub secret: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OAuth2Config {
+    pub client_id: String,
+    pub client_secret: String,
 }
 
 pub async fn read<P: AsRef<Path>>(path: P) -> Result<Config> {

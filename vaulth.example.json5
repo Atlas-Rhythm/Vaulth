@@ -1,25 +1,47 @@
 {
-  "port": 8080, // Port to listen on
-  "databaseUrl": "postgresql://127.0.0.1:5432/vaulth", // Database connection url
-  "userAgent": "vaulth", // User-Agent header to use when interacting with external providers (Optional)
-  "logLevel": "INFO", // Minimum log level used for filtering log messages (Optional)
+  // Port to listen on
+  "port": 8080,
+  // Database connection url
+  "databaseUrl": "postgresql://127.0.0.1:5432/vaulth",
+  // User-Agent header to use when interacting with external providers (Optional)
+  "userAgent": "vaulth",
+  // Minimum log level used for filtering log messages (Optional)
+  "logLevel": "INFO",
   // JWT tokens configuration
   "token": {
-    "key": "SuperSecretKey", // Key used for signing and verifying tokens
-    "duration": 10000 // Duration for which generated tokens stay valid, in minutes
+    // Key used for signing and verifying tokens
+    "key": "SuperSecretKey",
+    // Duration for which generated tokens stay valid, in minutes
+    "duration": 10000
   },
   // (Optional)
   "tls": {
-    "cert": "cert.pem", // Certificate file
-    "key": "key.rsa" // Key file
+    // Certificate file
+    "cert": "cert.pem",
+    // Key file
+    "key": "key.rsa"
   },
   // Argon2 hashing configuration, defaults to reasonable values
   "hash": {
-    "hashLen": 32, // Length of the password hash (Optional)
-    "saltLen": 16, // Length of the random salt (Optional)
-    "lanes": 1, // Number of lanes used for parallelism (Optional)
-    "memCost": 4096, // Amount of memory used, in KB (Optional)
-    "time_cost": 4, // Number of passes (Optional)
-    "secret": "SuperSecretSecret" // Custom secret, for additional security (Optional)
+    // Length of the password hash (Optional)
+    "hashLen": 32,
+    // Length of the random salt (Optional)
+    "saltLen": 16,
+    // Number of lanes used for parallelism (Optional)
+    "lanes": 1,
+    // Amount of memory used, in KB (Optional)
+    "memCost": 4096,
+    // Number of passes (Optional)
+    "time_cost": 4,
+    // Custom secret, for additional security (Optional)
+    "secret": "SuperSecretSecret"
+  },
+  // Root URI of the running instance, used to build redirect URIs, must not have a trailing slash
+  "rootUri": "https://example.com",
+
+  // Google OAuth2 info (Optional)
+  "google": {
+    "clientId": "abc123",
+    "clientSecret": "abc123"
   }
 }
