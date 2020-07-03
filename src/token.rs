@@ -2,27 +2,34 @@ use crate::config::TokenConfig;
 use anyhow::Result;
 use chrono::{DateTime, Duration, Utc};
 use jsonwebtoken::{errors::ErrorKind, DecodingKey, EncodingKey};
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use tokio::task;
 
 #[derive(Serialize, Deserialize)]
-struct Claims {
+pub struct Claims<T> {
     #[serde(with = "chrono_jwt")]
     exp: DateTime<Utc>,
     #[serde(with = "chrono_jwt")]
     iat: DateTime<Utc>,
     sub: String,
+    data: T,
 }
 
 /// Encodes and returns a JWT for the specified user
-pub async fn encode(user: String, config: &TokenConfig) -> Result<String> {
+pub async fn encode<T>(user: String, config: &TokenConfig, data: T) -> Result<String>
+where
+    T: Send + Serialize + 'static,
+{
     log::debug!("encoding jwt token");
 
     let duration = Duration::minutes(config.duration);
     let key = EncodingKey::from_secret(config.key.as_bytes());
-    Ok(task::spawn_blocking(move || encode_sync(user, duration, key)).await??)
+    Ok(task::spawn_blocking(move || encode_sync(user, duration, key, data)).await??)
 }
-fn encode_sync(sub: String, duration: Duration, key: EncodingKey) -> Result<String> {
+fn encode_sync<T>(sub: String, duration: Duration, key: EncodingKey, data: T) -> Result<String>
+where
+    T: Serialize,
+{
     let now = Utc::now();
     Ok(jsonwebtoken::encode(
         &Default::default(),
@@ -30,25 +37,32 @@ fn encode_sync(sub: String, duration: Duration, key: EncodingKey) -> Result<Stri
             exp: now + duration,
             iat: now,
             sub,
+            data,
         },
         &key,
     )?)
 }
 
 /// Decodes a JWT and returns the user it refers to if valid
-pub async fn decode(token: String, config: &TokenConfig) -> Result<Option<String>> {
+pub async fn decode<T>(token: String, config: &TokenConfig) -> Result<Option<Claims<T>>>
+where
+    T: Send + DeserializeOwned + 'static,
+{
     log::debug!("decoding jwt token");
 
     let key = config.key.as_bytes().to_vec();
     Ok(task::spawn_blocking(move || decode_sync(token, key)).await??)
 }
-fn decode_sync(token: String, key: Vec<u8>) -> Result<Option<String>> {
-    match jsonwebtoken::decode::<Claims>(
+fn decode_sync<T>(token: String, key: Vec<u8>) -> Result<Option<Claims<T>>>
+where
+    T: DeserializeOwned,
+{
+    match jsonwebtoken::decode::<Claims<T>>(
         &token,
         &DecodingKey::from_secret(&key),
         &Default::default(),
     ) {
-        Ok(data) => Ok(Some(data.claims.sub)),
+        Ok(data) => Ok(Some(data.claims)),
         Err(e) => match e.kind() {
             ErrorKind::InvalidKeyFormat | ErrorKind::Crypto(_) => Err(e.into()),
             _ => Ok(None),

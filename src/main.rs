@@ -34,10 +34,11 @@ async fn main() -> Result<()> {
     .await?;
     let config = Arc::new(config);
 
-    if let Some(level) = config.log_level {
-        if env::var_os(LOG_ENV_VAR).is_none() {
-            env::set_var(LOG_ENV_VAR, level.to_string());
-        }
+    if env::var_os(LOG_ENV_VAR).is_none() {
+        env::set_var(
+            LOG_ENV_VAR,
+            config.log_level.unwrap_or(log::Level::Info).to_string(),
+        );
     }
     env_logger::init_from_env(LOG_ENV_VAR);
 
@@ -51,7 +52,7 @@ async fn main() -> Result<()> {
             config
                 .user_agent
                 .as_ref()
-                .map(|s| s.as_ref())
+                .map(AsRef::as_ref)
                 .unwrap_or(concat!(
                     env!("CARGO_PKG_NAME"),
                     "/",
