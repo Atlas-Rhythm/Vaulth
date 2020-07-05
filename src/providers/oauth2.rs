@@ -12,16 +12,18 @@ use warp::{
     Filter, Rejection, Reply,
 };
 
-pub fn handler<'a, IdFnRet>(
+pub fn handler<IdFnRet>(
     name: &'static str,
     auth_uri: Uri,
     token_uri: &'static str,
     scopes: &'static [&'static str],
-    config: &'a OAuth2Config,
-    global_config: &'a Config,
-    http_client: &'a HttpClient,
-    id_fn: fn(String, &HttpClient) -> IdFnRet,
-) -> anyhow::Result<impl Filter<Extract = (impl Reply,), Error = Rejection> + 'a>
+    config: Arc<OAuth2Config>,
+    global_config: Arc<Config>,
+    http_client: Arc<HttpClient>,
+    id_fn: fn(String, Arc<HttpClient>) -> IdFnRet,
+) -> anyhow::Result<
+    impl Filter<Extract = (impl Reply,), Error = Rejection> + Send + Sync + Clone + 'static,
+>
 where
     IdFnRet: Future<Output = anyhow::Result<String>> + Send + 'static,
 {
@@ -37,31 +39,43 @@ where
     let first_handler = warp::path::path(name)
         .and(warp::path::end())
         .and(warp::query::query())
-        .and_then(move |query: Params| first_handler(query, &global_config, auth_uri.clone()));
+        .and(utils::inject(global_config.clone()))
+        .and_then(move |query: Params, global_config: Arc<Config>| {
+            first_handler(query, global_config, auth_uri.clone())
+        });
 
     let second_handler = warp::path::path(format!("{}-r", name))
         .and(warp::path::end())
         .and(warp::query::query())
+        .and(utils::inject(global_config))
+        .and(utils::inject(config))
         .and(utils::inject(Arc::new(scopes)))
-        .and_then(move |query: RedirectParams, scopes: Arc<String>| {
-            second_handler(
-                query,
-                &global_config,
-                &name,
-                &config,
-                scopes,
-                &http_client,
-                &token_uri,
-                id_fn,
-            )
-        });
+        .and(utils::inject(http_client))
+        .and_then(
+            move |query: RedirectParams,
+                  global_config: Arc<Config>,
+                  config: Arc<OAuth2Config>,
+                  scopes: Arc<String>,
+                  http_client: Arc<HttpClient>| {
+                second_handler(
+                    query,
+                    global_config,
+                    &name,
+                    config,
+                    scopes,
+                    http_client,
+                    &token_uri,
+                    id_fn,
+                )
+            },
+        );
 
     Ok(first_handler.or(second_handler))
 }
 
 async fn first_handler(
     query: Params,
-    global_config: &Config,
+    global_config: Arc<Config>,
     auth_uri: Uri,
 ) -> Result<impl Reply, Rejection> {
     let state = token::encode(query, &global_config.token)
@@ -74,13 +88,13 @@ async fn first_handler(
 
 async fn second_handler<IdFnRet>(
     query: RedirectParams,
-    global_config: &Config,
+    global_config: Arc<Config>,
     name: &str,
-    config: &OAuth2Config,
+    config: Arc<OAuth2Config>,
     scopes: Arc<String>,
-    http_client: &HttpClient,
+    http_client: Arc<HttpClient>,
     token_uri: &str,
-    id_fn: fn(String, &HttpClient) -> IdFnRet,
+    id_fn: fn(String, Arc<HttpClient>) -> IdFnRet,
 ) -> Result<impl Reply, Rejection>
 where
     IdFnRet: Future<Output = anyhow::Result<String>> + Send + 'static,

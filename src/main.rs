@@ -62,14 +62,13 @@ async fn main() -> Result<()> {
         .build()?;
     let client = Arc::new(client);
 
-    serve(
-        warp::any()
-            .map(|| "Hello, World!")
-            .with(warp::log("vaulth")),
-        &config,
-    )
-    .await;
+    let routes = providers::discord::handler(
+        Arc::new(config.discord.clone().unwrap()),
+        config.clone(),
+        client,
+    )?;
 
+    serve(routes, &config).await;
     Ok(())
 }
 

@@ -16,6 +16,7 @@ pub struct Config {
     pub root_uri: String,
 
     pub google: Option<OAuth2Config>,
+    pub discord: Option<OAuth2Config>,
 }
 
 #[derive(Deserialize)]
@@ -43,7 +44,7 @@ pub struct HashConfig {
     pub secret: Option<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OAuth2Config {
     pub client_id: String,
