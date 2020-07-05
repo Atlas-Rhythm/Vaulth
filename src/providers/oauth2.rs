@@ -12,11 +12,16 @@ use warp::{
     Filter, Rejection, Reply,
 };
 
+#[derive(Copy, Clone)]
+pub struct ProviderInfo {
+    pub name: &'static str,
+    pub auth_uri: &'static str,
+    pub token_uri: &'static str,
+    pub scopes: &'static [&'static str],
+}
+
 pub fn handler<IdFnRet>(
-    name: &'static str,
-    auth_uri: Uri,
-    token_uri: &'static str,
-    scopes: &'static [&'static str],
+    info: ProviderInfo,
     config: Arc<OAuth2Config>,
     global_config: Arc<Config>,
     http_client: Arc<HttpClient>,
@@ -27,16 +32,17 @@ pub fn handler<IdFnRet>(
 where
     IdFnRet: Future<Output = anyhow::Result<String>> + Send + 'static,
 {
-    let scopes = scopes.join(" ");
+    let auth_uri = Uri::from_static(info.auth_uri);
+    let scopes = info.scopes.join(" ");
 
     let auth_uri = build_auth_uri(
         auth_uri.into_parts(),
         &config.client_id,
         &global_config.root_uri,
-        name,
+        info.name,
         &scopes,
     )?;
-    let first_handler = warp::path::path(name)
+    let first_handler = warp::path::path(info.name)
         .and(warp::path::end())
         .and(warp::query::query())
         .and(utils::inject(global_config.clone()))
@@ -44,7 +50,7 @@ where
             first_handler(query, global_config, auth_uri.clone())
         });
 
-    let second_handler = warp::path::path(format!("{}-r", name))
+    let second_handler = warp::path::path(format!("{}-r", info.name))
         .and(warp::path::end())
         .and(warp::query::query())
         .and(utils::inject(global_config))
@@ -60,11 +66,11 @@ where
                 second_handler(
                     query,
                     global_config,
-                    &name,
+                    info.name,
                     config,
                     scopes,
                     http_client,
-                    &token_uri,
+                    info.token_uri,
                     id_fn,
                 )
             },

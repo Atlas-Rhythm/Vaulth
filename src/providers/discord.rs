@@ -1,3 +1,4 @@
+use super::oauth2::{self, ProviderInfo};
 use crate::{
     config::{Config, OAuth2Config},
     HttpClient,
@@ -5,12 +6,14 @@ use crate::{
 use anyhow::Result;
 use serde::Deserialize;
 use std::sync::Arc;
-use warp::{http::Uri, Filter, Rejection, Reply};
+use warp::{Filter, Rejection, Reply};
 
-const NAME: &str = "discord";
-const AUTH_URI: &str = "https://discord.com/api/oauth2/authorize";
-const TOKEN_URI: &str = "https://discord.com/api/oauth2/token";
-const SCOPES: &[&str] = &["identify"];
+const INFO: ProviderInfo = ProviderInfo {
+    name: "discord",
+    auth_uri: "https://discord.com/api/oauth2/authorize",
+    token_uri: "https://discord.com/api/oauth2/token",
+    scopes: &["identify"],
+};
 
 #[derive(Deserialize)]
 struct UserResponse {
@@ -34,15 +37,5 @@ pub fn handler(
     http_client: Arc<HttpClient>,
 ) -> Result<impl Filter<Extract = (impl Reply,), Error = Rejection> + Send + Sync + Clone + 'static>
 {
-    let auth_uri = Uri::from_maybe_shared(AUTH_URI)?;
-    super::oauth2::handler(
-        NAME,
-        auth_uri,
-        TOKEN_URI,
-        SCOPES,
-        config,
-        global_config,
-        http_client,
-        id_fn,
-    )
+    oauth2::handler(INFO, config, global_config, http_client, id_fn)
 }
