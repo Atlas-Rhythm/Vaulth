@@ -43,5 +43,10 @@
   "google": {
     "clientId": "abc123",
     "clientSecret": "abc123"
+  },
+  // Discord OAuth2 info (Optional)
+  "discord": {
+    "clientId": "abc123",
+    "clientSecret": "abc123"
   }
 }
