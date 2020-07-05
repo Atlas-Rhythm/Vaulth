@@ -6,10 +6,13 @@ pub mod microsoft;
 pub mod steam;
 pub mod twitter;
 
+mod oauth2;
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
-pub struct State {
+pub struct Params {
     redirect_uri: String,
     state: Option<String>,
+    user: Option<String>,
 }

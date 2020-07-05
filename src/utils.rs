@@ -1,9 +1,9 @@
 use std::{convert::Infallible, fmt::Display, sync::Arc};
 use warp::{reject::Reject, Filter, Rejection};
 
-pub fn inject<'a, T: Send + Sync>(
-    val: &'a Arc<T>,
-) -> impl Filter<Extract = (Arc<T>,), Error = Infallible> + Clone + 'a {
+pub fn inject<T: Send + Sync>(
+    val: Arc<T>,
+) -> impl Filter<Extract = (Arc<T>,), Error = Infallible> + Clone {
     warp::any().map(move || val.clone())
 }
 
