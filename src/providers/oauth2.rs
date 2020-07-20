@@ -47,6 +47,8 @@ pub fn handler<IdFnRet>(
 where
     IdFnRet: Future<Output = anyhow::Result<String>> + Send + 'static,
 {
+    tracing::debug!("generating {} handlers", info.name);
+
     let auth_uri = Uri::from_static(info.auth_uri);
     let scopes = info.scopes.join(" ");
 
@@ -89,11 +91,31 @@ async fn first_handler(
     global_config: &'static Config,
     auth_uri: Uri,
 ) -> Result<impl Reply, Rejection> {
+    // Verify the infos are valid
+    match global_config.clients.get(&query.client_id) {
+        Some(c) => {
+            if !c.redirect_urls.iter().any(|u| u == &query.redirect_uri) {
+                let uri = Uri::from_maybe_shared(error_redirect_uri_from_state(
+                    &query,
+                    "invalid redirect_uri",
+                ))
+                .or_ise()?;
+                return Ok(warp::redirect::temporary(uri));
+            }
+        }
+        None => {
+            let uri =
+                Uri::from_maybe_shared(error_redirect_uri_from_state(&query, "invalid client_id"))
+                    .or_ise()?;
+            return Ok(warp::redirect::temporary(uri));
+        }
+    };
+
     // Encode the client id and redirect url in the state that will be sent to the provider
     // Required to know where to forward info from the provider
     // Using a JWT for the task makes it possible to store state and provide security at the same time
     let state = token::encode(query, &global_config.token).await.or_ise()?;
-    Ok(warp::redirect(
+    Ok(warp::redirect::temporary(
         finish_auth_uri(auth_uri.into_parts(), &state).or_ise()?,
     ))
 }

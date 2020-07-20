@@ -1,6 +1,9 @@
 use anyhow::Result;
 use serde::Deserialize;
-use std::path::{Path, PathBuf};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+};
 use tokio::fs;
 
 #[derive(Debug, Deserialize)]
@@ -14,6 +17,8 @@ pub struct Config {
     pub tls: Option<TlsConfig>,
     pub hash: HashConfig,
     pub root_uri: String,
+
+    pub clients: HashMap<String, ClientConfig>,
 
     pub google: Option<OAuth2Config>,
     pub discord: Option<OAuth2Config>,
@@ -43,6 +48,13 @@ pub struct HashConfig {
     pub mem_cost: Option<u32>,
     pub time_cost: Option<u32>,
     pub secret: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClientConfig {
+    pub secret: String,
+    pub redirect_urls: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
