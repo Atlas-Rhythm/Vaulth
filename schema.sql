@@ -10,6 +10,5 @@ CREATE TABLE users (
     facebook_id  VARCHAR(255),
     twitter_id   VARCHAR(255),
     github_id    VARCHAR(255),
-    discord_id   VARCHAR(255),
-    steam_id     VARCHAR(255)
+    discord_id   VARCHAR(255)
 );
