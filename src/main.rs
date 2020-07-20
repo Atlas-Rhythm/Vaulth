@@ -6,9 +6,9 @@ compile_error!("A single database backend must be selected");
 
 mod config;
 mod db;
-mod hash;
+mod jwt;
+mod password;
 mod providers;
-mod token;
 mod utils;
 
 use anyhow::Result;

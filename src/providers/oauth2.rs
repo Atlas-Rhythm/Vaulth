@@ -1,8 +1,8 @@
 use crate::{
     config::{Config, OAuth2Config},
     db::User,
+    jwt,
     providers::{CodeJwt, Params},
-    token,
     utils::{self, TryExt},
     DbConnection, HttpClient,
 };
@@ -114,7 +114,7 @@ async fn first_handler(
     // Encode the client id and redirect url in the state that will be sent to the provider
     // Required to know where to forward info from the provider
     // Using a JWT for the task makes it possible to store state and provide security at the same time
-    let state = token::encode(query, &global_config.token).await.or_ise()?;
+    let state = jwt::encode(query, &global_config.token).await.or_ise()?;
     Ok(warp::redirect::temporary(
         finish_auth_uri(auth_uri.into_parts(), &state).or_ise()?,
     ))
@@ -141,7 +141,7 @@ where
         RedirectParams::Success { code, state } => (code, state),
         RedirectParams::Error { error, state } => {
             // It's ok to not forward the error here cause it can only be cause by malicious requests
-            let state: Params = token::decode(state, &shared.global_config.token)
+            let state: Params = jwt::decode(state, &shared.global_config.token)
                 .await
                 .or_ise()?
                 .or_ise()?;
@@ -150,7 +150,7 @@ where
             return Ok(warp::redirect::temporary(uri));
         }
     };
-    let state: Params = token::decode(state, &shared.global_config.token)
+    let state: Params = jwt::decode(state, &shared.global_config.token)
         .await
         .or_ise()?
         .or_ise()?;
@@ -192,7 +192,7 @@ where
         provider_id,
         client_id: state.client_id.clone(),
     };
-    let code = token::encode(code, &shared.global_config.token)
+    let code = jwt::encode(code, &shared.global_config.token)
         .await
         .or_ise()?;
 
