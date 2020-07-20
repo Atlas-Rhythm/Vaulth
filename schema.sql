@@ -1,8 +1,9 @@
 CREATE TABLE vaulth (
-    id           VARCHAR(64)  NOT NULL PRIMARY KEY,
-    inserted_at  DATETIME     NOT NULL,
-    updated_at   DATETIME     NOT NULL,
-    login_at     DATETIME     NOT NULL,
+    id           VARCHAR(64) NOT NULL PRIMARY KEY,
+
+    inserted_at  TIMESTAMP   NOT NULL,
+    updated_at   TIMESTAMP   NOT NULL,
+    login_at     TIMESTAMP   NOT NULL,
 
     display_name VARCHAR(64),
     about        TEXT,

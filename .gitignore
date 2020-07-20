@@ -2,3 +2,6 @@
 
 .vscode/
 .idea/
+
+vaulth.json
+.env
