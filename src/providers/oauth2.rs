@@ -81,8 +81,8 @@ where
     Ok(first_handler.or(second_handler))
 }
 
-// This is where the user is redirected by the client
-// The handler translates and stores important info, then redirects the user to the provider
+/// This is where the user is redirected by the client
+/// The handler translates and stores important info, then redirects the user to the provider
 #[tracing::instrument]
 async fn first_handler(
     query: Params,
@@ -98,10 +98,10 @@ async fn first_handler(
     ))
 }
 
-// This is where the user is redirected from the provider, and where the heavy lifting is done
-// The handler exchanges the code for a token, then uses it to obtain the provider user ID,
-// then creates a code that can be exchanged by the client for a token for the Vaulth user linked to the provider user ID,
-// and finally redirects the user back to the client
+/// This is where the user is redirected from the provider, and where the heavy lifting is done
+/// The handler exchanges the code for a token, then uses it to obtain the provider user ID,
+/// then creates a code that can be exchanged by the client for a token for the Vaulth user linked to the provider user ID,
+/// and finally redirects the user back to the client
 #[tracing::instrument]
 async fn second_handler<IdFnRet>(
     query: RedirectParams,
