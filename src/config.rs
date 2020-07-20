@@ -22,7 +22,8 @@ pub struct Config {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TokenConfig {
-    pub key: String,
+    pub public_key: PathBuf,
+    pub private_key: PathBuf,
     pub duration: i64,
 }
 

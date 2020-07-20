@@ -9,8 +9,10 @@
   "logLevel": "INFO",
   // JWT tokens configuration
   "token": {
-    // Key used for signing and verifying tokens
-    "key": "SuperSecretKey",
+    // Private key used for signing tokens, in pem format
+    "privateKey": "private.pem",
+    // Public key used for verifying tokens, in pem format
+    "publicKey": "public.pem",
     // Duration for which generated tokens stay valid, in minutes
     "duration": 10000
   },

@@ -1,9 +1,9 @@
 use crate::config::TokenConfig;
 use anyhow::Result;
 use chrono::{DateTime, Duration, Utc};
-use jsonwebtoken::{errors::ErrorKind, DecodingKey, EncodingKey};
+use jsonwebtoken::{errors::ErrorKind, Algorithm, DecodingKey, EncodingKey, Header};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use tokio::task;
+use tokio::{fs, task};
 
 #[derive(Serialize, Deserialize)]
 struct Claims<T> {
@@ -22,22 +22,22 @@ where
     log::debug!("encoding jwt token");
 
     let duration = Duration::minutes(config.duration);
-    let key = EncodingKey::from_secret(config.key.as_bytes());
+    let key = fs::read(&config.private_key).await?;
     Ok(task::spawn_blocking(move || encode_sync(data, duration, key)).await??)
 }
-fn encode_sync<T>(data: T, duration: Duration, key: EncodingKey) -> Result<String>
+fn encode_sync<T>(data: T, duration: Duration, key: Vec<u8>) -> Result<String>
 where
     T: Serialize,
 {
     let now = Utc::now();
     Ok(jsonwebtoken::encode(
-        &Default::default(),
+        &Header::new(Algorithm::ES384),
         &Claims {
             exp: now + duration,
             iat: now,
             data,
         },
-        &key,
+        &EncodingKey::from_ec_pem(&key)?,
     )?)
 }
 
@@ -48,7 +48,7 @@ where
 {
     log::debug!("decoding jwt token");
 
-    let key = config.key.as_bytes().to_vec();
+    let key = fs::read(&config.public_key).await?;
     Ok(task::spawn_blocking(move || decode_sync(token, key)).await??)
 }
 fn decode_sync<T>(token: String, key: Vec<u8>) -> Result<Option<T>>
