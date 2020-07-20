@@ -30,6 +30,15 @@ If no config file is specified, it defaults to `vaulth.json`.
 
 See [example](vaulth.example.json5) (the comments are present for clarity only, parsing will fail if the config file uses JSON5).
 
+### Generating JWT keypair
+
+The JWT signature algorithm used by Vaulth is ES384.
+
+```
+openssl ecparam -genkey -name secp384r1 -noout -out private.pem
+openssl ec -in private.pem -pubout -out public.pem
+```
+
 ## Building
 
 ### PostgreSQL
