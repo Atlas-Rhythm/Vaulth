@@ -5,6 +5,7 @@
 compile_error!("A single database backend must be selected");
 
 mod config;
+mod db;
 mod hash;
 mod providers;
 mod token;

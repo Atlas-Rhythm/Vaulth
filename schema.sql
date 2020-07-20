@@ -1,4 +1,4 @@
-CREATE TABLE users (
+CREATE TABLE vaulth (
     id           VARCHAR(64)  NOT NULL PRIMARY KEY,
     inserted_at  DATETIME     NOT NULL,
     updated_at   DATETIME     NOT NULL,
