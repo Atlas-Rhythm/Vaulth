@@ -1,6 +1,5 @@
-use super::oauth2::{self, ProviderInfo};
 use crate::{
-    config::{Config, OAuth2Config},
+    providers::oauth2::{self, ProviderInfo, SharedResources},
     HttpClient,
 };
 use anyhow::Result;
@@ -31,10 +30,8 @@ async fn id_fn(token: String, http_client: &'static HttpClient) -> Result<String
 }
 
 pub fn handler(
-    config: &'static OAuth2Config,
-    global_config: &'static Config,
-    http_client: &'static HttpClient,
+    shared: SharedResources,
 ) -> Result<impl Filter<Extract = (impl Reply,), Error = Rejection> + Send + Sync + Clone + 'static>
 {
-    oauth2::handler(INFO, config, global_config, http_client, id_fn)
+    oauth2::handler(INFO, shared, id_fn)
 }

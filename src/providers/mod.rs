@@ -5,13 +5,27 @@ pub mod google;
 pub mod microsoft;
 pub mod twitter;
 
-mod oauth2;
+pub mod oauth2;
 
 use serde::{Deserialize, Serialize};
 
+/// Query parameters coming from the client
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Params {
-    redirect_uri: String,
-    state: Option<String>,
-    user: Option<String>,
+    pub client_id: String,
+    pub redirect_uri: String,
+    pub state: Option<String>,
+    pub token: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CodeJwt {
+    pub provider_name: String,
+    pub provider_id: String,
+    pub client_id: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TokenJwt {
+    pub id: String,
 }

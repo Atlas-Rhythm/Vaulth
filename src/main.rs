@@ -13,6 +13,7 @@ mod utils;
 
 use anyhow::Result;
 use config::Config;
+use providers::oauth2::SharedResources;
 use reqwest::Client as HttpClient;
 use sqlx::Pool;
 use std::env;
@@ -33,17 +34,25 @@ async fn main() -> Result<()> {
     if env::var_os(LOG_ENV_VAR).is_none() {
         env::set_var(
             LOG_ENV_VAR,
-            config.log_level.unwrap_or(tracing::Level::INFO.to_string()),
+            config
+                .log_level
+                .as_ref()
+                .unwrap_or(&tracing::Level::INFO.to_string()),
         );
     }
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::from_env(LOG_ENV_VAR))
         .init();
 
-    let _pool = pool(config).await?;
+    let pool = pool(config).await?;
     let client = client(&config).await?;
 
-    let routes = providers::discord::handler(&config.discord.unwrap(), config, client)?;
+    let routes = providers::discord::handler(SharedResources {
+        config: config.discord.as_ref().unwrap(),
+        global_config: config,
+        http_client: client,
+        pool,
+    })?;
 
     serve(routes, &config).await;
     Ok(())

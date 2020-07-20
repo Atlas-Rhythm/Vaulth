@@ -1,7 +1,7 @@
 use crate::{
     config::{Config, OAuth2Config},
     db::User,
-    providers::Params,
+    providers::{CodeJwt, Params},
     token,
     utils::{self, TryExt},
     DbConnection, HttpClient,
@@ -15,6 +15,7 @@ use warp::{
     Filter, Rejection, Reply,
 };
 
+/// Information about a standard OAuth2 provider
 #[derive(Copy, Clone)]
 pub struct ProviderInfo {
     pub name: &'static str,
@@ -23,6 +24,7 @@ pub struct ProviderInfo {
     pub scopes: &'static [&'static str],
 }
 
+/// Resources shared across handlers
 #[derive(Copy, Clone, Derivative)]
 #[derivative(Debug)]
 pub struct SharedResources {
@@ -34,6 +36,7 @@ pub struct SharedResources {
     pub pool: &'static Pool<DbConnection>,
 }
 
+/// Generates a filter handling everything for a single provider
 pub fn handler<IdFnRet>(
     info: ProviderInfo,
     shared: SharedResources,
@@ -47,6 +50,7 @@ where
     let auth_uri = Uri::from_static(info.auth_uri);
     let scopes = info.scopes.join(" ");
 
+    // Create the provider URI where the user is first redirected
     let auth_uri = build_auth_uri(
         auth_uri.into_parts(),
         &shared.config.client_id,
@@ -54,6 +58,7 @@ where
         info.name,
         &scopes,
     )?;
+
     let first_handler = warp::path::path(info.name)
         .and(warp::path::end())
         .and(warp::query::query())
@@ -76,18 +81,27 @@ where
     Ok(first_handler.or(second_handler))
 }
 
+// This is where the user is redirected by the client
+// The handler translates and stores important info, then redirects the user to the provider
 #[tracing::instrument]
 async fn first_handler(
     query: Params,
     global_config: &'static Config,
     auth_uri: Uri,
 ) -> Result<impl Reply, Rejection> {
+    // Encode the client id and redirect url in the state that will be sent to the provider
+    // Required to know where to forward info from the provider
+    // Using a JWT for the task makes it possible to store state and provide security at the same time
     let state = token::encode(query, &global_config.token).await.or_ise()?;
     Ok(warp::redirect(
         finish_auth_uri(auth_uri.into_parts(), &state).or_ise()?,
     ))
 }
 
+// This is where the user is redirected from the provider, and where the heavy lifting is done
+// The handler exchanges the code for a token, then uses it to obtain the provider user ID,
+// then creates a code that can be exchanged by the client for a token for the Vaulth user linked to the provider user ID,
+// and finally redirects the user back to the client
 #[tracing::instrument]
 async fn second_handler<IdFnRet>(
     query: RedirectParams,
@@ -100,9 +114,11 @@ async fn second_handler<IdFnRet>(
 where
     IdFnRet: Future<Output = anyhow::Result<String>> + Send + 'static,
 {
+    // Try to extract the initial query params from the state returned by the provider
     let (code, state) = match query {
         RedirectParams::Success { code, state } => (code, state),
         RedirectParams::Error { error, state } => {
+            // It's ok to not forward the error here cause it can only be cause by malicious requests
             let state: Params = token::decode(state, &shared.global_config.token)
                 .await
                 .or_ise()?
@@ -117,6 +133,7 @@ where
         .or_ise()?
         .or_ise()?;
 
+    // Create the form used to exchange a code for a token
     let redirect_uri = format!("{}/{}-r", &shared.global_config.root_uri, name);
     let post_form = TokenRequest::new(
         &code,
@@ -126,6 +143,7 @@ where
         &scopes,
     );
 
+    // Exchange the code for a token
     let token = shared
         .http_client
         .post(token_uri)
@@ -138,18 +156,35 @@ where
         .or_ise()?
         .access_token;
 
+    // Defer to the provider-specific code to grab an ID from the token
     let provider_id = id_fn(token, shared.http_client).await.or_ise()?;
+
+    // Try to find a Vaulth user matching that provider ID
     let user_id = User::select_by_provider(name, &provider_id, shared.pool)
         .await
         .or_ise()?;
 
-    let code = token::encode(id, &shared.global_config.token)
+    // Generate a code the client can exchange for a Vaulth token
+    let code = CodeJwt {
+        provider_name: name.to_owned(),
+        provider_id,
+        client_id: state.client_id.clone(),
+    };
+    let code = token::encode(code, &shared.global_config.token)
         .await
         .or_ise()?;
-    let uri = Uri::from_maybe_shared(success_redirect_uri_from_state(&state, &code)).or_ise()?;
+
+    // Redirect the user back to the client
+    let uri = Uri::from_maybe_shared(success_redirect_uri_from_state(
+        &state,
+        &code,
+        user_id.as_ref().map(AsRef::as_ref),
+    ))
+    .or_ise()?;
     Ok(warp::redirect::temporary(uri))
 }
 
+/// Redirect query parameters from a standard OAuth2 provider
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
 enum RedirectParams {
@@ -157,6 +192,7 @@ enum RedirectParams {
     Error { error: String, state: String },
 }
 
+/// Standard OAuth2 code exchange request body
 #[derive(Serialize)]
 struct TokenRequest<'a> {
     code: &'a str,
@@ -190,6 +226,7 @@ struct TokenResponse {
     access_token: String,
 }
 
+/// Builds part of a standard OAuth2 authentication URI (used for providers)
 fn build_auth_uri(
     mut uri: Parts,
     client_id: &str,
@@ -209,12 +246,14 @@ fn build_auth_uri(
     Ok(Uri::from_parts(uri)?)
 }
 
+/// Adds the state and finishes a standard OAuth2 authentication URI (used for providers)
 fn finish_auth_uri(mut uri: Parts, state: &str) -> anyhow::Result<Uri> {
     let pq = format!("{}&state={}", uri.path_and_query.as_ref().unwrap(), state);
     uri.path_and_query = Some(PathAndQuery::from_maybe_shared(pq.as_str().to_owned())?);
     Ok(Uri::from_parts(uri)?)
 }
 
+/// Creates a redirect URI for errors (used for the client)
 fn error_redirect_uri_from_state(params: &Params, error: &str) -> String {
     match &params.state {
         Some(s) => format!("{}?error={}&state={}", params.redirect_uri, error, s),
@@ -222,9 +261,14 @@ fn error_redirect_uri_from_state(params: &Params, error: &str) -> String {
     }
 }
 
-fn success_redirect_uri_from_state(params: &Params, token: &str) -> String {
-    match &params.state {
-        Some(s) => format!("{}?token={}&state={}", params.redirect_uri, token, s),
-        None => format!("{}?token={}", params.redirect_uri, token),
+/// Creates a redirect URI for success (used for the client)
+fn success_redirect_uri_from_state(params: &Params, code: &str, user: Option<&str>) -> String {
+    let mut uri = format!("{}?code={}", params.redirect_uri, code);
+    if let Some(state) = &params.state {
+        uri = format!("{}&state={}", uri, state);
     }
+    if let Some(user) = user {
+        uri = format!("{}&user={}", uri, user);
+    }
+    uri
 }
