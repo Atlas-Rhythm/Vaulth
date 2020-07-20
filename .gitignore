@@ -4,4 +4,4 @@
 .idea/
 
 vaulth.json
-.env
+*.pem

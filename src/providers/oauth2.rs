@@ -1,11 +1,14 @@
 use crate::{
     config::{Config, OAuth2Config},
+    db::User,
     providers::Params,
     token,
     utils::{self, TryExt},
-    HttpClient,
+    DbConnection, HttpClient,
 };
+use derivative::Derivative;
 use serde::{Deserialize, Serialize};
+use sqlx::Pool;
 use std::{future::Future, sync::Arc};
 use warp::{
     http::uri::{Parts, PathAndQuery, Uri},
@@ -20,11 +23,20 @@ pub struct ProviderInfo {
     pub scopes: &'static [&'static str],
 }
 
+#[derive(Copy, Clone, Derivative)]
+#[derivative(Debug)]
+pub struct SharedResources {
+    pub config: &'static OAuth2Config,
+    pub global_config: &'static Config,
+    #[derivative(Debug = "ignore")]
+    pub http_client: &'static HttpClient,
+    #[derivative(Debug = "ignore")]
+    pub pool: &'static Pool<DbConnection>,
+}
+
 pub fn handler<IdFnRet>(
     info: ProviderInfo,
-    config: &'static OAuth2Config,
-    global_config: &'static Config,
-    http_client: &'static HttpClient,
+    shared: SharedResources,
     id_fn: fn(String, &'static HttpClient) -> IdFnRet,
 ) -> anyhow::Result<
     impl Filter<Extract = (impl Reply,), Error = Rejection> + Send + Sync + Clone + 'static,
@@ -37,15 +49,15 @@ where
 
     let auth_uri = build_auth_uri(
         auth_uri.into_parts(),
-        &config.client_id,
-        &global_config.root_uri,
+        &shared.config.client_id,
+        &shared.global_config.root_uri,
         info.name,
         &scopes,
     )?;
     let first_handler = warp::path::path(info.name)
         .and(warp::path::end())
         .and(warp::query::query())
-        .and(utils::with_copied(global_config))
+        .and(utils::with_copied(shared.global_config))
         .and_then(move |query: Params, global_config: &'static Config| {
             first_handler(query, global_config, auth_uri.clone())
         });
@@ -53,26 +65,11 @@ where
     let second_handler = warp::path::path(format!("{}-r", info.name))
         .and(warp::path::end())
         .and(warp::query::query())
-        .and(utils::with_copied(global_config))
-        .and(utils::with_copied(config))
+        .and(utils::with_copied(shared))
         .and(utils::with_cloned(Arc::new(scopes)))
-        .and(utils::with_copied(http_client))
         .and_then(
-            move |query: RedirectParams,
-                  global_config: &'static Config,
-                  config: &'static OAuth2Config,
-                  scopes: Arc<String>,
-                  http_client: &'static HttpClient| {
-                second_handler(
-                    query,
-                    global_config,
-                    info.name,
-                    config,
-                    scopes,
-                    http_client,
-                    info.token_uri,
-                    id_fn,
-                )
+            move |query: RedirectParams, shared: SharedResources, scopes: Arc<String>| {
+                second_handler(query, info.name, scopes, info.token_uri, shared, id_fn)
             },
         );
 
@@ -94,12 +91,10 @@ async fn first_handler(
 #[tracing::instrument]
 async fn second_handler<IdFnRet>(
     query: RedirectParams,
-    global_config: &'static Config,
     name: &str,
-    config: &'static OAuth2Config,
     scopes: Arc<String>,
-    http_client: &'static HttpClient,
     token_uri: &str,
+    shared: SharedResources,
     id_fn: fn(String, &'static HttpClient) -> IdFnRet,
 ) -> Result<impl Reply, Rejection>
 where
@@ -108,7 +103,7 @@ where
     let (code, state) = match query {
         RedirectParams::Success { code, state } => (code, state),
         RedirectParams::Error { error, state } => {
-            let state: Params = token::decode(state, &global_config.token)
+            let state: Params = token::decode(state, &shared.global_config.token)
                 .await
                 .or_ise()?
                 .or_ise()?;
@@ -117,21 +112,22 @@ where
             return Ok(warp::redirect::temporary(uri));
         }
     };
-    let state: Params = token::decode(state, &global_config.token)
+    let state: Params = token::decode(state, &shared.global_config.token)
         .await
         .or_ise()?
         .or_ise()?;
 
-    let redirect_uri = format!("{}/{}-r", &global_config.root_uri, name);
+    let redirect_uri = format!("{}/{}-r", &shared.global_config.root_uri, name);
     let post_form = TokenRequest::new(
         &code,
-        &config.client_id,
-        &config.client_secret,
+        &shared.config.client_id,
+        &shared.config.client_secret,
         &redirect_uri,
         &scopes,
     );
 
-    let token = http_client
+    let token = shared
+        .http_client
         .post(token_uri)
         .form(&post_form)
         .send()
@@ -142,10 +138,15 @@ where
         .or_ise()?
         .access_token;
 
-    let id = id_fn(token, http_client).await.or_ise()?;
+    let provider_id = id_fn(token, shared.http_client).await.or_ise()?;
+    let user_id = User::select_by_provider(name, &provider_id, shared.pool)
+        .await
+        .or_ise()?;
 
-    let token = token::encode(id, &global_config.token).await.or_ise()?;
-    let uri = Uri::from_maybe_shared(success_redirect_uri_from_state(&state, &token)).or_ise()?;
+    let code = token::encode(id, &shared.global_config.token)
+        .await
+        .or_ise()?;
+    let uri = Uri::from_maybe_shared(success_redirect_uri_from_state(&state, &code)).or_ise()?;
     Ok(warp::redirect::temporary(uri))
 }
 
