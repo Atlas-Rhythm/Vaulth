@@ -9,7 +9,7 @@ mod oauth2;
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Params {
     redirect_uri: String,
     state: Option<String>,

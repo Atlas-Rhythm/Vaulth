@@ -1,9 +1,17 @@
-use std::{convert::Infallible, fmt::Display, sync::Arc};
+use std::{convert::Infallible, fmt::Display};
 use warp::{reject::Reject, Filter, Rejection};
 
-pub fn inject<T: Send + Sync>(
-    val: Arc<T>,
-) -> impl Filter<Extract = (Arc<T>,), Error = Infallible> + Clone {
+/// Injects a Copy type into a filter
+pub fn with_copied<T: Copy + Send + 'static>(
+    val: T,
+) -> impl Filter<Extract = (T,), Error = Infallible> + Copy + 'static {
+    warp::any().map(move || val)
+}
+
+/// Injects a Clone type into a filter
+pub fn with_cloned<T: Clone + Send + Sync + 'static>(
+    val: T,
+) -> impl Filter<Extract = (T,), Error = Infallible> + Clone + 'static {
     warp::any().map(move || val.clone())
 }
 
@@ -12,30 +20,30 @@ struct InternalServerError;
 impl Reject for InternalServerError {}
 
 pub trait TryExt<T> {
-    fn or_internal_server_error(self) -> Result<T, Rejection>;
-    fn or_not_found(self) -> Result<T, Rejection>;
+    fn or_ise(self) -> Result<T, Rejection>;
+    fn or_nf(self) -> Result<T, Rejection>;
 }
 
 impl<T, E: Display> TryExt<T> for Result<T, E> {
-    fn or_internal_server_error(self) -> Result<T, Rejection> {
+    fn or_ise(self) -> Result<T, Rejection> {
         self.map_err(|e| {
-            log::error!("{}", e);
+            tracing::error!("{}", e);
             warp::reject::custom(InternalServerError)
         })
     }
-    fn or_not_found(self) -> Result<T, Rejection> {
+    fn or_nf(self) -> Result<T, Rejection> {
         self.map_err(|e| {
-            log::error!("{}", e);
+            tracing::error!("{}", e);
             warp::reject::not_found()
         })
     }
 }
 
 impl<T> TryExt<T> for Option<T> {
-    fn or_internal_server_error(self) -> Result<T, Rejection> {
+    fn or_ise(self) -> Result<T, Rejection> {
         self.ok_or_else(|| warp::reject::custom(InternalServerError))
     }
-    fn or_not_found(self) -> Result<T, Rejection> {
+    fn or_nf(self) -> Result<T, Rejection> {
         self.ok_or_else(warp::reject::not_found)
     }
 }

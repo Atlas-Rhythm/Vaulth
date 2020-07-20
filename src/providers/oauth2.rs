@@ -22,10 +22,10 @@ pub struct ProviderInfo {
 
 pub fn handler<IdFnRet>(
     info: ProviderInfo,
-    config: Arc<OAuth2Config>,
-    global_config: Arc<Config>,
-    http_client: Arc<HttpClient>,
-    id_fn: fn(String, Arc<HttpClient>) -> IdFnRet,
+    config: &'static OAuth2Config,
+    global_config: &'static Config,
+    http_client: &'static HttpClient,
+    id_fn: fn(String, &'static HttpClient) -> IdFnRet,
 ) -> anyhow::Result<
     impl Filter<Extract = (impl Reply,), Error = Rejection> + Send + Sync + Clone + 'static,
 >
@@ -45,24 +45,24 @@ where
     let first_handler = warp::path::path(info.name)
         .and(warp::path::end())
         .and(warp::query::query())
-        .and(utils::inject(global_config.clone()))
-        .and_then(move |query: Params, global_config: Arc<Config>| {
+        .and(utils::with_copied(global_config))
+        .and_then(move |query: Params, global_config: &'static Config| {
             first_handler(query, global_config, auth_uri.clone())
         });
 
     let second_handler = warp::path::path(format!("{}-r", info.name))
         .and(warp::path::end())
         .and(warp::query::query())
-        .and(utils::inject(global_config))
-        .and(utils::inject(config))
-        .and(utils::inject(Arc::new(scopes)))
-        .and(utils::inject(http_client))
+        .and(utils::with_copied(global_config))
+        .and(utils::with_copied(config))
+        .and(utils::with_cloned(Arc::new(scopes)))
+        .and(utils::with_copied(http_client))
         .and_then(
             move |query: RedirectParams,
-                  global_config: Arc<Config>,
-                  config: Arc<OAuth2Config>,
+                  global_config: &'static Config,
+                  config: &'static OAuth2Config,
                   scopes: Arc<String>,
-                  http_client: Arc<HttpClient>| {
+                  http_client: &'static HttpClient| {
                 second_handler(
                     query,
                     global_config,
@@ -79,28 +79,28 @@ where
     Ok(first_handler.or(second_handler))
 }
 
+#[tracing::instrument]
 async fn first_handler(
     query: Params,
-    global_config: Arc<Config>,
+    global_config: &'static Config,
     auth_uri: Uri,
 ) -> Result<impl Reply, Rejection> {
-    let state = token::encode(query, &global_config.token)
-        .await
-        .or_internal_server_error()?;
+    let state = token::encode(query, &global_config.token).await.or_ise()?;
     Ok(warp::redirect(
-        finish_auth_uri(auth_uri.into_parts(), &state).or_internal_server_error()?,
+        finish_auth_uri(auth_uri.into_parts(), &state).or_ise()?,
     ))
 }
 
+#[tracing::instrument]
 async fn second_handler<IdFnRet>(
     query: RedirectParams,
-    global_config: Arc<Config>,
+    global_config: &'static Config,
     name: &str,
-    config: Arc<OAuth2Config>,
+    config: &'static OAuth2Config,
     scopes: Arc<String>,
-    http_client: Arc<HttpClient>,
+    http_client: &'static HttpClient,
     token_uri: &str,
-    id_fn: fn(String, Arc<HttpClient>) -> IdFnRet,
+    id_fn: fn(String, &'static HttpClient) -> IdFnRet,
 ) -> Result<impl Reply, Rejection>
 where
     IdFnRet: Future<Output = anyhow::Result<String>> + Send + 'static,
@@ -110,17 +110,17 @@ where
         RedirectParams::Error { error, state } => {
             let state: Params = token::decode(state, &global_config.token)
                 .await
-                .or_internal_server_error()?
-                .or_internal_server_error()?;
-            let uri = Uri::from_maybe_shared(error_redirect_uri_from_state(&state, &error))
-                .or_internal_server_error()?;
+                .or_ise()?
+                .or_ise()?;
+            let uri =
+                Uri::from_maybe_shared(error_redirect_uri_from_state(&state, &error)).or_ise()?;
             return Ok(warp::redirect::temporary(uri));
         }
     };
     let state: Params = token::decode(state, &global_config.token)
         .await
-        .or_internal_server_error()?
-        .or_internal_server_error()?;
+        .or_ise()?
+        .or_ise()?;
 
     let redirect_uri = format!("{}/{}-r", &global_config.root_uri, name);
     let post_form = TokenRequest::new(
@@ -136,23 +136,20 @@ where
         .form(&post_form)
         .send()
         .await
-        .or_internal_server_error()?
+        .or_ise()?
         .json::<TokenResponse>()
         .await
-        .or_internal_server_error()?
+        .or_ise()?
         .access_token;
 
-    let id = id_fn(token, http_client).await.or_internal_server_error()?;
+    let id = id_fn(token, http_client).await.or_ise()?;
 
-    let token = token::encode(id, &global_config.token)
-        .await
-        .or_internal_server_error()?;
-    let uri = Uri::from_maybe_shared(success_redirect_uri_from_state(&state, &token))
-        .or_internal_server_error()?;
+    let token = token::encode(id, &global_config.token).await.or_ise()?;
+    let uri = Uri::from_maybe_shared(success_redirect_uri_from_state(&state, &token)).or_ise()?;
     Ok(warp::redirect::temporary(uri))
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(untagged)]
 enum RedirectParams {
     Success { code: String, state: String },

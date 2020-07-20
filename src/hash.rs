@@ -5,8 +5,9 @@ use rand::{rngs::OsRng, Rng};
 use tokio::task;
 
 /// Hashes a password
-pub async fn hash(password: &str, config: HashConfig) -> Result<String> {
-    log::debug!("hashing password");
+#[tracing::instrument]
+pub async fn hash(password: &str, config: &'static HashConfig) -> Result<String> {
+    tracing::debug!("hashing password");
 
     let password = password.as_bytes().to_vec();
 
@@ -53,7 +54,7 @@ fn hash_sync<'a>(
     config.secret = secret;
 
     let hash = argon2::hash_encoded(&password, &salt, &config)?;
-    if hash.len() > 255 {
+    if hash.len() >= 256 {
         return Err(anyhow!(
             "hash length exceeds maximum length supported in the database"
         ));
@@ -63,8 +64,9 @@ fn hash_sync<'a>(
 }
 
 /// Verifies a password hash
+#[tracing::instrument]
 pub async fn verify(hash: String, password: &str, secret: &str) -> Result<bool> {
-    log::debug!("verifying password hash");
+    tracing::debug!("verifying password hash");
 
     let password = password.as_bytes().to_vec();
     let secret = secret.as_bytes().to_vec();

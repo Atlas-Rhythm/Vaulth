@@ -3,13 +3,13 @@ use serde::Deserialize;
 use std::path::{Path, PathBuf};
 use tokio::fs;
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Config {
     pub port: u16,
     pub database_url: String,
     pub user_agent: Option<String>,
-    pub log_level: Option<log::Level>,
+    pub log_level: Option<String>,
     pub token: TokenConfig,
     pub tls: Option<TlsConfig>,
     pub hash: HashConfig,
@@ -19,7 +19,7 @@ pub struct Config {
     pub discord: Option<OAuth2Config>,
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TokenConfig {
     pub public_key: PathBuf,
@@ -27,14 +27,14 @@ pub struct TokenConfig {
     pub duration: i64,
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TlsConfig {
     pub cert: PathBuf,
     pub key: PathBuf,
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HashConfig {
     pub hash_len: Option<u32>,
@@ -45,7 +45,7 @@ pub struct HashConfig {
     pub secret: Option<String>,
 }
 
-#[derive(Clone, Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OAuth2Config {
     pub client_id: String,

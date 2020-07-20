@@ -3,6 +3,7 @@ use anyhow::Result;
 use chrono::{DateTime, Duration, Utc};
 use jsonwebtoken::{errors::ErrorKind, Algorithm, DecodingKey, EncodingKey, Header};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use std::fmt;
 use tokio::{fs, task};
 
 #[derive(Serialize, Deserialize)]
@@ -15,11 +16,12 @@ struct Claims<T> {
 }
 
 /// Encodes and returns a JWT for the specified user
+#[tracing::instrument]
 pub async fn encode<T>(data: T, config: &TokenConfig) -> Result<String>
 where
-    T: Send + Serialize + 'static,
+    T: Send + Serialize + fmt::Debug + 'static,
 {
-    log::debug!("encoding jwt token");
+    tracing::debug!("encoding jwt token");
 
     let duration = Duration::minutes(config.duration);
     let key = fs::read(&config.private_key).await?;
@@ -42,11 +44,12 @@ where
 }
 
 /// Decodes a JWT and returns the user it refers to if valid
+#[tracing::instrument]
 pub async fn decode<T>(token: String, config: &TokenConfig) -> Result<Option<T>>
 where
-    T: Send + DeserializeOwned + 'static,
+    T: Send + DeserializeOwned + fmt::Debug + 'static,
 {
-    log::debug!("decoding jwt token");
+    tracing::debug!("decoding jwt token");
 
     let key = fs::read(&config.public_key).await?;
     Ok(task::spawn_blocking(move || decode_sync(token, key)).await??)

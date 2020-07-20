@@ -5,7 +5,6 @@ use crate::{
 };
 use anyhow::Result;
 use serde::Deserialize;
-use std::sync::Arc;
 use warp::{Filter, Rejection, Reply};
 
 const INFO: ProviderInfo = ProviderInfo {
@@ -20,7 +19,7 @@ struct UserResponse {
     id: String,
 }
 
-async fn id_fn(token: String, http_client: Arc<HttpClient>) -> Result<String> {
+async fn id_fn(token: String, http_client: &'static HttpClient) -> Result<String> {
     Ok(http_client
         .get("https://discord.com/api/v6/users/@me")
         .bearer_auth(token)
@@ -32,9 +31,9 @@ async fn id_fn(token: String, http_client: Arc<HttpClient>) -> Result<String> {
 }
 
 pub fn handler(
-    config: Arc<OAuth2Config>,
-    global_config: Arc<Config>,
-    http_client: Arc<HttpClient>,
+    config: &'static OAuth2Config,
+    global_config: &'static Config,
+    http_client: &'static HttpClient,
 ) -> Result<impl Filter<Extract = (impl Reply,), Error = Rejection> + Send + Sync + Clone + 'static>
 {
     oauth2::handler(INFO, config, global_config, http_client, id_fn)
