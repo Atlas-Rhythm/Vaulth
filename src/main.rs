@@ -6,9 +6,11 @@ compile_error!("A single database backend must be selected");
 
 mod config;
 mod db;
+mod errors;
 mod jwt;
 mod password;
 mod providers;
+mod routes;
 mod utils;
 
 use anyhow::Result;
@@ -54,7 +56,7 @@ async fn main() -> Result<()> {
         pool,
     })?;
 
-    serve(routes, &config).await;
+    serve(routes.recover(errors::handle_rejection), &config).await;
     Ok(())
 }
 

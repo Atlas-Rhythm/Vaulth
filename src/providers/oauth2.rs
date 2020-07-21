@@ -1,10 +1,10 @@
 use crate::{
     config::{Config, OAuth2Config},
     db::User,
+    errors::TryExt,
     jwt,
     providers::{CodeJwt, Params},
-    utils::{self, TryExt},
-    DbConnection, HttpClient,
+    utils, DbConnection, HttpClient,
 };
 use derivative::Derivative;
 use serde::{Deserialize, Serialize};
@@ -92,24 +92,15 @@ async fn first_handler(
     auth_uri: Uri,
 ) -> Result<impl Reply, Rejection> {
     // Verify the infos are valid
-    match global_config.clients.get(&query.client_id) {
-        Some(c) => {
-            if !c.redirect_urls.iter().any(|u| u == &query.redirect_uri) {
-                let uri = Uri::from_maybe_shared(error_redirect_uri_from_state(
-                    &query,
-                    "invalid redirect_uri",
-                ))
-                .or_ise()?;
-                return Ok(warp::redirect::temporary(uri));
-            }
-        }
-        None => {
-            let uri =
-                Uri::from_maybe_shared(error_redirect_uri_from_state(&query, "invalid client_id"))
-                    .or_ise()?;
-            return Ok(warp::redirect::temporary(uri));
-        }
-    };
+    let client = global_config
+        .clients
+        .get(&query.client_id)
+        .or_redirect("invalid client_id", &query)?;
+    client
+        .redirect_urls
+        .iter()
+        .find(|u| *u == &query.redirect_uri)
+        .or_redirect("invalid redirect_uri", &query)?;
 
     // Encode the client id and redirect url in the state that will be sent to the provider
     // Required to know where to forward info from the provider
@@ -141,16 +132,20 @@ where
         RedirectParams::Success { code, state } => (code, state),
         RedirectParams::Error { error, state } => {
             // It's ok to not forward the error here cause it can only be cause by malicious requests
-            let state: Params = jwt::decode(state, &shared.global_config.token)
+            let params: Params = jwt::decode(state, &shared.global_config.token)
                 .await
                 .or_ise()?
                 .or_ise()?;
-            let uri =
-                Uri::from_maybe_shared(error_redirect_uri_from_state(&state, &error)).or_ise()?;
+            let uri = Uri::from_maybe_shared(match &params.state {
+                Some(s) => format!("{}?error={}&state={}", params.redirect_uri, error, s),
+                None => format!("{}?error={}", params.redirect_uri, error),
+            })
+            .or_ise()?;
             return Ok(warp::redirect::temporary(uri));
         }
     };
-    let state: Params = jwt::decode(state, &shared.global_config.token)
+    // It's ok to not forward the error here cause it can only be cause by malicious requests
+    let params: Params = jwt::decode(state, &shared.global_config.token)
         .await
         .or_ise()?
         .or_ise()?;
@@ -172,37 +167,39 @@ where
         .form(&post_form)
         .send()
         .await
-        .or_ise()?
+        .or_redirect("couldn't obtain token from provider", &params)?
         .json::<TokenResponse>()
         .await
-        .or_ise()?
+        .or_redirect("couldn't obtain token from provider", &params)?
         .access_token;
 
     // Defer to the provider-specific code to grab an ID from the token
-    let provider_id = id_fn(token, shared.http_client).await.or_ise()?;
+    let provider_id = id_fn(token, shared.http_client)
+        .await
+        .or_redirect("couldn't obtain id from provider", &params)?;
 
     // Try to find a Vaulth user matching that provider ID
     let user_id = User::select_by_provider(name, &provider_id, shared.pool)
         .await
-        .or_ise()?;
+        .or_redirect("internal server error", &params)?;
 
     // Generate a code the client can exchange for a Vaulth token
     let code = CodeJwt {
         provider_name: name.to_owned(),
         provider_id,
-        client_id: state.client_id.clone(),
+        client_id: params.client_id.clone(),
     };
     let code = jwt::encode(code, &shared.global_config.token)
         .await
-        .or_ise()?;
+        .or_redirect("internal server error", &params)?;
 
     // Redirect the user back to the client
     let uri = Uri::from_maybe_shared(success_redirect_uri_from_state(
-        &state,
+        &params,
         &code,
         user_id.as_ref().map(AsRef::as_ref),
     ))
-    .or_ise()?;
+    .or_redirect("internal server error", &params)?;
     Ok(warp::redirect::temporary(uri))
 }
 
@@ -273,14 +270,6 @@ fn finish_auth_uri(mut uri: Parts, state: &str) -> anyhow::Result<Uri> {
     let pq = format!("{}&state={}", uri.path_and_query.as_ref().unwrap(), state);
     uri.path_and_query = Some(PathAndQuery::from_maybe_shared(pq.as_str().to_owned())?);
     Ok(Uri::from_parts(uri)?)
-}
-
-/// Creates a redirect URI for errors (used for the client)
-fn error_redirect_uri_from_state(params: &Params, error: &str) -> String {
-    match &params.state {
-        Some(s) => format!("{}?error={}&state={}", params.redirect_uri, error, s),
-        None => format!("{}?error={}", params.redirect_uri, error),
-    }
 }
 
 /// Creates a redirect URI for success (used for the client)
