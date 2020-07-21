@@ -1,7 +1,8 @@
 use crate::providers::Params;
-use std::fmt::Display;
+use serde::Serialize;
+use std::fmt::{Debug, Display};
 use warp::{
-    http::Uri,
+    http::{StatusCode, Uri},
     reject::{Reject, Rejection},
     Reply,
 };
@@ -14,10 +15,20 @@ impl Reject for InternalServerError {}
 struct Redirect(Uri);
 impl Reject for Redirect {}
 
+#[derive(Debug, Serialize)]
+pub struct JsonError {
+    pub error: &'static str,
+}
+
+#[derive(Debug)]
+struct Json(JsonError, StatusCode);
+impl Reject for Json {}
+
 pub trait TryExt<T> {
     fn or_ise(self) -> Result<T, Rejection>;
     fn or_nf(self) -> Result<T, Rejection>;
     fn or_redirect<M: Display>(self, msg: M, params: &Params) -> Result<T, Rejection>;
+    fn or_json(self, json: JsonError, status: StatusCode) -> Result<T, Rejection>;
 }
 
 impl<T, E: Display> TryExt<T> for Result<T, E> {
@@ -49,6 +60,13 @@ impl<T, E: Display> TryExt<T> for Result<T, E> {
             }
         })
     }
+
+    fn or_json(self, json: JsonError, status: StatusCode) -> Result<T, Rejection> {
+        self.map_err(|e| {
+            tracing::error!("{}", e);
+            warp::reject::custom(Json(json, status))
+        })
+    }
 }
 
 impl<T> TryExt<T> for Option<T> {
@@ -72,11 +90,23 @@ impl<T> TryExt<T> for Option<T> {
             }
         })
     }
+
+    fn or_json(self, json: JsonError, status: StatusCode) -> Result<T, Rejection> {
+        self.ok_or_else(|| warp::reject::custom(Json(json, status)))
+    }
 }
 
-pub async fn handle_rejection(err: Rejection) -> Result<impl Reply, Rejection> {
+pub async fn handle_redirects(err: Rejection) -> Result<impl Reply, Rejection> {
     if let Some(Redirect(uri)) = err.find() {
         Ok(warp::redirect::temporary(uri.clone()))
+    } else {
+        Err(err)
+    }
+}
+
+pub async fn handle_json(err: Rejection) -> Result<impl Reply, Rejection> {
+    if let Some(Json(json, status)) = err.find() {
+        Ok(warp::reply::with_status(warp::reply::json(json), *status))
     } else {
         Err(err)
     }

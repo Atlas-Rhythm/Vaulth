@@ -12,6 +12,8 @@ struct Claims<T> {
     exp: DateTime<Utc>,
     #[serde(with = "chrono_jwt")]
     iat: DateTime<Utc>,
+
+    #[serde(flatten)]
     data: T,
 }
 

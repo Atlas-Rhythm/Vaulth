@@ -5,10 +5,15 @@ use warp::{Filter, Rejection, Reply};
 
 const NAME: &str = "github";
 
+fn redirect_uri(root: &str) -> String {
+    format!("{}/{}-r", root, NAME)
+}
+
 fn uri_fn(shared: SharedResources) -> String {
     format!(
-        "https://github.com/login/oauth/authorize?client_id={}&redirect_uri={}/{}-r",
-        shared.config.client_id, shared.global_config.root_uri, NAME,
+        "https://github.com/login/oauth/authorize?client_id={}&redirect_uri={}",
+        shared.config.client_id,
+        redirect_uri(&shared.global_config.root_uri),
     )
 }
 

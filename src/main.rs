@@ -16,6 +16,7 @@ use anyhow::Result;
 use config::Config;
 use providers::oauth::SharedResources;
 use reqwest::Client as HttpClient;
+use routes::token::TokenRequestBody;
 use sqlx::Pool;
 use std::env;
 use tracing_subscriber::EnvFilter;
@@ -62,9 +63,23 @@ async fn main() -> Result<()> {
     .or(providers::github::handler(SharedResources {
         config: config.github.as_ref().unwrap(),
         ..shared
-    })?);
+    })?)
+    .or(warp::path!("token")
+        .and(warp::body::json())
+        .and_then(move |body: TokenRequestBody| routes::token::token(body, config, pool)))
+    .or(warp::path!("token" / String)
+        .and(warp::body::json())
+        .and_then(move |user: String, body: TokenRequestBody| {
+            routes::token::token_user(user, body, config, pool)
+        }));
 
-    serve(routes.recover(errors::handle_rejection), &config).await;
+    serve(
+        routes
+            .recover(errors::handle_redirects)
+            .recover(errors::handle_json),
+        &config,
+    )
+    .await;
     Ok(())
 }
 

@@ -27,5 +27,5 @@ pub struct CodeJwt {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TokenJwt {
-    pub id: String,
+    pub sub: String,
 }
