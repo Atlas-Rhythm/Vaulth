@@ -63,7 +63,8 @@ async fn main() -> Result<()> {
         config: config.github.as_ref(),
         ..shared
     })?)
-    .or(routes::token::handler(config, pool));
+    .or(routes::token::handler(config, pool))
+    .or(routes::key::handler(&config.token));
 
     serve(
         routes
