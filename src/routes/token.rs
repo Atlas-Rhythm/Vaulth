@@ -8,7 +8,7 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 use sqlx::Pool;
-use warp::{http::StatusCode, Rejection, Reply};
+use warp::{http::StatusCode, Filter, Rejection, Reply};
 
 #[derive(Debug, Deserialize)]
 pub struct TokenRequestBody {
@@ -23,8 +23,20 @@ struct SuccessResponse {
     expires_in: i64,
 }
 
+pub fn handler(
+    config: &'static Config,
+    pool: &'static Pool<DbConnection>,
+) -> impl Filter<Extract = (impl Reply,), Error = Rejection> + Clone + 'static {
+    (warp::path!("token")
+        .and(warp::body::json())
+        .and_then(move |body: TokenRequestBody| token(body, config, pool)))
+    .or(warp::path!("token" / String)
+        .and(warp::body::json())
+        .and_then(move |user: String, body: TokenRequestBody| token_user(user, body, config, pool)))
+}
+
 #[tracing::instrument(skip(pool))]
-pub async fn token(
+async fn token(
     body: TokenRequestBody,
     config: &'static Config,
     pool: &'static Pool<DbConnection>,
@@ -52,7 +64,7 @@ pub async fn token(
 }
 
 #[tracing::instrument(skip(pool))]
-pub async fn token_user(
+async fn token_user(
     given_user: String,
     body: TokenRequestBody,
     config: &'static Config,

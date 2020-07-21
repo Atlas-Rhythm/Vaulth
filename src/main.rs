@@ -64,14 +64,7 @@ async fn main() -> Result<()> {
         config: config.github.as_ref().unwrap(),
         ..shared
     })?)
-    .or(warp::path!("token")
-        .and(warp::body::json())
-        .and_then(move |body: TokenRequestBody| routes::token::token(body, config, pool)))
-    .or(warp::path!("token" / String)
-        .and(warp::body::json())
-        .and_then(move |user: String, body: TokenRequestBody| {
-            routes::token::token_user(user, body, config, pool)
-        }));
+    .or(routes::token::handler(config, pool));
 
     serve(
         routes
