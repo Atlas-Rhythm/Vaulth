@@ -1,7 +1,4 @@
-use crate::providers::{
-    oauth::{self, ProviderInfo, SharedResources},
-    Params,
-};
+use crate::providers::oauth::{self, ProviderInfo, SharedResources};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use warp::{Filter, Rejection, Reply};
@@ -19,7 +16,7 @@ fn uri_fn(shared: SharedResources) -> String {
     )
 }
 
-async fn id_fn(code: String, params: Params, shared: SharedResources) -> Result<String> {
+async fn id_fn(code: String, shared: SharedResources) -> Result<String> {
     #[derive(Serialize)]
     struct TokenRequest<'a> {
         client_id: &'static str,

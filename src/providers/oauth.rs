@@ -23,7 +23,7 @@ pub struct ProviderInfo<IdFnRet> {
     pub uri_fn: fn(SharedResources) -> String,
     /// Function used to obtain an ID from a provider
     #[derivative(Debug = "ignore")]
-    pub id_fn: fn(String, Params, SharedResources) -> IdFnRet,
+    pub id_fn: fn(String, SharedResources) -> IdFnRet,
 }
 
 impl<IdFnRet> Copy for ProviderInfo<IdFnRet> {}
@@ -149,7 +149,7 @@ where
         .or_ise()?;
 
     // Defer to the provider-specific code to grab an ID using the code
-    let provider_id = (provider.id_fn)(code, params.clone(), shared)
+    let provider_id = (provider.id_fn)(code, shared)
         .await
         .or_redirect("couldn't obtain id from provider", &params)?;
 
