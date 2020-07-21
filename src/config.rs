@@ -21,6 +21,7 @@ pub struct Config {
     pub clients: HashMap<String, ClientConfig>,
 
     pub google: Option<OAuth2Config>,
+    pub github: Option<OAuth2Config>,
     pub discord: Option<OAuth2Config>,
 }
 

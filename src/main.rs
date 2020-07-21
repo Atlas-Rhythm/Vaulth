@@ -48,12 +48,21 @@ async fn main() -> Result<()> {
     let pool = pool(config).await?;
     let client = client(&config).await?;
 
-    let routes = providers::discord::handler(SharedResources {
+    let shared = SharedResources {
         config: config.discord.as_ref().unwrap(),
         global_config: config,
         http_client: client,
         pool,
-    })?;
+    };
+
+    let routes = (providers::discord::handler(SharedResources {
+        config: config.discord.as_ref().unwrap(),
+        ..shared
+    })?)
+    .or(providers::github::handler(SharedResources {
+        config: config.github.as_ref().unwrap(),
+        ..shared
+    })?);
 
     serve(routes.recover(errors::handle_rejection), &config).await;
     Ok(())

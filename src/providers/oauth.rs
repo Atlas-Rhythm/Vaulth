@@ -23,7 +23,7 @@ pub struct ProviderInfo<IdFnRet> {
     pub uri_fn: fn(SharedResources) -> String,
     /// Function used to obtain an ID from a provider
     #[derivative(Debug = "ignore")]
-    pub id_fn: fn(String, SharedResources) -> IdFnRet,
+    pub id_fn: fn(String, String, SharedResources) -> IdFnRet,
 }
 
 impl<IdFnRet> Copy for ProviderInfo<IdFnRet> {}
@@ -143,13 +143,13 @@ where
         }
     };
     // It's ok to not forward the error here cause it can only be cause by malicious requests
-    let params: Params = jwt::decode(state, &shared.global_config.token)
+    let params: Params = jwt::decode(state.clone(), &shared.global_config.token)
         .await
         .or_ise()?
         .or_ise()?;
 
     // Defer to the provider-specific code to grab an ID using the code
-    let provider_id = (provider.id_fn)(code, shared)
+    let provider_id = (provider.id_fn)(code, state, shared)
         .await
         .or_redirect("couldn't obtain id from provider", &params)?;
 

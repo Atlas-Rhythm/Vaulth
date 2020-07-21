@@ -16,7 +16,7 @@ fn uri_fn(shared: SharedResources) -> String {
     )
 }
 
-async fn id_fn(code: String, shared: SharedResources) -> Result<String> {
+async fn id_fn(code: String, _: String, shared: SharedResources) -> Result<String> {
     #[derive(Serialize)]
     struct TokenRequest<'a> {
         client_id: &'static str,
