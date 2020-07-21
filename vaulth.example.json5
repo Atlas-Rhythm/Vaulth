@@ -2,17 +2,17 @@
   // Port to listen on
   "port": 8080,
   // Database connection url
-  "databaseUrl": "postgresql://127.0.0.1:5432/vaulth",
+  "database-url": "postgresql://127.0.0.1:5432/vaulth",
   // User-Agent header to use when interacting with external providers (Optional)
-  "userAgent": "vaulth",
+  "user-agent": "vaulth",
   // Minimum log level used for filtering log messages (Optional)
-  "logLevel": "INFO",
+  "log-level": "INFO",
   // JWT tokens configuration
   "token": {
     // Private key used for signing tokens, in pem format
-    "privateKey": "private.pem",
+    "private-key": "private.pem",
     // Public key used for verifying tokens, in pem format
-    "publicKey": "public.pem",
+    "public-key": "public.pem",
     // Duration for which generated tokens stay valid, in minutes
     "duration": 10000
   },
@@ -26,34 +26,37 @@
   // Argon2 hashing configuration, defaults to reasonable values
   "hash": {
     // Length of the password hash (Optional)
-    "hashLen": 32,
+    "hash-len": 32,
     // Length of the random salt (Optional)
-    "saltLen": 16,
+    "salt-len": 16,
     // Number of lanes used for parallelism (Optional)
     "lanes": 1,
     // Amount of memory used, in KB (Optional)
-    "memCost": 4096,
+    "mem-cost": 4096,
     // Number of passes (Optional)
-    "time_cost": 4,
+    "time-cost": 4,
     // Custom secret, for additional security (Optional)
     "secret": "SuperSecretSecret"
   },
   // Root URI of the running instance, used to build redirect URIs, must not have a trailing slash
-  "rootUri": "https://example.com",
-
-  // Google OAuth2 info (Optional)
-  "google": {
-    "clientId": "abc123",
-    "clientSecret": "abc123"
+  "root-uri": "https://example.com",
+  // Recognized clients by ID
+  "clients": {
+    "abc": {
+      "client-secret": "123",
+      "redirect-urls": [
+        "https://example.com"
+      ]
+    }
   },
   // GitHub OAuth2 info (Optional)
   "github": {
-    "clientId": "abc123",
-    "clientSecret": "abc123"
+    "client-id": "abc",
+    "client-secret": "123"
   },
   // Discord OAuth2 info (Optional)
   "discord": {
-    "clientId": "abc123",
-    "clientSecret": "abc123"
+    "client-id": "abc",
+    "client-secret": "123"
   }
 }

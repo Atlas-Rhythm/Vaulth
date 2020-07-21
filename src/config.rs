@@ -7,7 +7,7 @@ use std::{
 use tokio::fs;
 
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "kebab-case")]
 pub struct Config {
     pub port: u16,
     pub database_url: String,
@@ -20,13 +20,12 @@ pub struct Config {
 
     pub clients: HashMap<String, ClientConfig>,
 
-    pub google: Option<OAuth2Config>,
     pub github: Option<OAuth2Config>,
     pub discord: Option<OAuth2Config>,
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "kebab-case")]
 pub struct TokenConfig {
     pub public_key: PathBuf,
     pub private_key: PathBuf,
@@ -34,14 +33,14 @@ pub struct TokenConfig {
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "kebab-case")]
 pub struct TlsConfig {
     pub cert: PathBuf,
     pub key: PathBuf,
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "kebab-case")]
 pub struct HashConfig {
     pub hash_len: Option<u32>,
     pub salt_len: Option<usize>,
@@ -52,14 +51,14 @@ pub struct HashConfig {
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "kebab-case")]
 pub struct ClientConfig {
     pub client_secret: String,
     pub redirect_urls: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "kebab-case")]
 pub struct OAuth2Config {
     pub client_id: String,
     pub client_secret: String,
