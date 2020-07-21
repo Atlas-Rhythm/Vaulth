@@ -11,11 +11,10 @@ mod jwt;
 mod password;
 mod providers;
 mod routes;
-mod utils;
 
 use anyhow::Result;
 use config::Config;
-use providers::oauth2::SharedResources;
+use providers::oauth::SharedResources;
 use reqwest::Client as HttpClient;
 use sqlx::Pool;
 use std::env;

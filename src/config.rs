@@ -53,7 +53,7 @@ pub struct HashConfig {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ClientConfig {
-    pub secret: String,
+    pub client_secret: String,
     pub redirect_urls: Vec<String>,
 }
 

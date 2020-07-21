@@ -4,24 +4,37 @@ use crate::{
     errors::TryExt,
     jwt,
     providers::{CodeJwt, Params},
-    utils, DbConnection, HttpClient,
+    DbConnection, HttpClient,
 };
 use derivative::Derivative;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use sqlx::Pool;
-use std::{future::Future, sync::Arc};
-use warp::{
-    http::uri::{Parts, PathAndQuery, Uri},
-    Filter, Rejection, Reply,
-};
+use std::future::Future;
+use warp::{http::uri::Uri, Filter, Rejection, Reply};
 
 /// Information about a standard OAuth2 provider
-#[derive(Copy, Clone)]
-pub struct ProviderInfo {
+#[derive(Derivative)]
+#[derivative(Debug)]
+pub struct ProviderInfo<IdFnRet> {
+    /// Name of the provider
     pub name: &'static str,
-    pub auth_uri: &'static str,
-    pub token_uri: &'static str,
-    pub scopes: &'static [&'static str],
+    /// Function used to start building the auth URI
+    #[derivative(Debug = "ignore")]
+    pub uri_fn: fn(SharedResources) -> String,
+    /// Function used to obtain an ID from a provider
+    #[derivative(Debug = "ignore")]
+    pub id_fn: fn(String, Params, SharedResources) -> IdFnRet,
+}
+
+impl<IdFnRet> Copy for ProviderInfo<IdFnRet> {}
+impl<IdFnRet> Clone for ProviderInfo<IdFnRet> {
+    fn clone(&self) -> Self {
+        Self {
+            name: self.name,
+            uri_fn: self.uri_fn,
+            id_fn: self.id_fn,
+        }
+    }
 }
 
 /// Resources shared across handlers
@@ -38,47 +51,27 @@ pub struct SharedResources {
 
 /// Generates a filter handling everything for a single provider
 pub fn handler<IdFnRet>(
-    info: ProviderInfo,
+    provider: ProviderInfo<IdFnRet>,
     shared: SharedResources,
-    id_fn: fn(String, &'static HttpClient) -> IdFnRet,
 ) -> anyhow::Result<
     impl Filter<Extract = (impl Reply,), Error = Rejection> + Send + Sync + Clone + 'static,
 >
 where
     IdFnRet: Future<Output = anyhow::Result<String>> + Send + 'static,
 {
-    tracing::debug!("generating {} handlers", info.name);
+    tracing::debug!("generating {} handlers", provider.name);
 
-    let auth_uri = Uri::from_static(info.auth_uri);
-    let scopes = info.scopes.join(" ");
+    let uri = (provider.uri_fn)(shared);
 
-    // Create the provider URI where the user is first redirected
-    let auth_uri = build_auth_uri(
-        auth_uri.into_parts(),
-        &shared.config.client_id,
-        &shared.global_config.root_uri,
-        info.name,
-        &scopes,
-    )?;
-
-    let first_handler = warp::path::path(info.name)
+    let first_handler = warp::path::path(provider.name)
         .and(warp::path::end())
         .and(warp::query::query())
-        .and(utils::with_copied(shared.global_config))
-        .and_then(move |query: Params, global_config: &'static Config| {
-            first_handler(query, global_config, auth_uri.clone())
-        });
+        .and_then(move |query: Params| first_handler(query, shared.global_config, uri.clone()));
 
-    let second_handler = warp::path::path(format!("{}-r", info.name))
+    let second_handler = warp::path::path(format!("{}-r", provider.name))
         .and(warp::path::end())
         .and(warp::query::query())
-        .and(utils::with_copied(shared))
-        .and(utils::with_cloned(Arc::new(scopes)))
-        .and_then(
-            move |query: RedirectParams, shared: SharedResources, scopes: Arc<String>| {
-                second_handler(query, info.name, scopes, info.token_uri, shared, id_fn)
-            },
-        );
+        .and_then(move |query: RedirectParams| second_handler(query, provider, shared));
 
     Ok(first_handler.or(second_handler))
 }
@@ -89,7 +82,7 @@ where
 async fn first_handler(
     query: Params,
     global_config: &'static Config,
-    auth_uri: Uri,
+    uri: String,
 ) -> Result<impl Reply, Rejection> {
     // Verify the infos are valid
     let client = global_config
@@ -107,8 +100,16 @@ async fn first_handler(
     // Using a JWT for the task makes it possible to store state and provide security at the same time
     let state = jwt::encode(query, &global_config.token).await.or_ise()?;
     Ok(warp::redirect::temporary(
-        finish_auth_uri(auth_uri.into_parts(), &state).or_ise()?,
+        finish_auth_uri(&uri, &state).or_ise()?,
     ))
+}
+
+/// Redirect query parameters from a standard OAuth2 provider
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum RedirectParams {
+    Success { code: String, state: String },
+    Error { error: String, state: String },
 }
 
 /// This is where the user is redirected from the provider, and where the heavy lifting is done
@@ -118,11 +119,8 @@ async fn first_handler(
 #[tracing::instrument]
 async fn second_handler<IdFnRet>(
     query: RedirectParams,
-    name: &str,
-    scopes: Arc<String>,
-    token_uri: &str,
+    provider: ProviderInfo<IdFnRet>,
     shared: SharedResources,
-    id_fn: fn(String, &'static HttpClient) -> IdFnRet,
 ) -> Result<impl Reply, Rejection>
 where
     IdFnRet: Future<Output = anyhow::Result<String>> + Send + 'static,
@@ -150,42 +148,19 @@ where
         .or_ise()?
         .or_ise()?;
 
-    // Create the form used to exchange a code for a token
-    let redirect_uri = format!("{}/{}-r", &shared.global_config.root_uri, name);
-    let post_form = TokenRequest::new(
-        &code,
-        &shared.config.client_id,
-        &shared.config.client_secret,
-        &redirect_uri,
-        &scopes,
-    );
-
-    // Exchange the code for a token
-    let token = shared
-        .http_client
-        .post(token_uri)
-        .form(&post_form)
-        .send()
-        .await
-        .or_redirect("couldn't obtain token from provider", &params)?
-        .json::<TokenResponse>()
-        .await
-        .or_redirect("couldn't obtain token from provider", &params)?
-        .access_token;
-
-    // Defer to the provider-specific code to grab an ID from the token
-    let provider_id = id_fn(token, shared.http_client)
+    // Defer to the provider-specific code to grab an ID using the code
+    let provider_id = (provider.id_fn)(code, params.clone(), shared)
         .await
         .or_redirect("couldn't obtain id from provider", &params)?;
 
     // Try to find a Vaulth user matching that provider ID
-    let user_id = User::select_by_provider(name, &provider_id, shared.pool)
+    let user_id = User::select_by_provider(provider.name, &provider_id, shared.pool)
         .await
         .or_redirect("internal server error", &params)?;
 
     // Generate a code the client can exchange for a Vaulth token
     let code = CodeJwt {
-        provider_name: name.to_owned(),
+        provider_name: provider.name.to_owned(),
         provider_id,
         client_id: params.client_id.clone(),
     };
@@ -203,73 +178,10 @@ where
     Ok(warp::redirect::temporary(uri))
 }
 
-/// Redirect query parameters from a standard OAuth2 provider
-#[derive(Debug, Deserialize)]
-#[serde(untagged)]
-enum RedirectParams {
-    Success { code: String, state: String },
-    Error { error: String, state: String },
-}
-
-/// Standard OAuth2 code exchange request body
-#[derive(Serialize)]
-struct TokenRequest<'a> {
-    code: &'a str,
-    client_id: &'a str,
-    client_secret: &'a str,
-    redirect_uri: &'a str,
-    scope: &'a str,
-    grant_type: &'static str,
-}
-impl<'a> TokenRequest<'a> {
-    fn new(
-        code: &'a str,
-        client_id: &'a str,
-        client_secret: &'a str,
-        redirect_uri: &'a str,
-        scope: &'a str,
-    ) -> Self {
-        Self {
-            code,
-            client_id,
-            client_secret,
-            redirect_uri,
-            scope,
-            grant_type: "authorization_code",
-        }
-    }
-}
-
-#[derive(Deserialize)]
-struct TokenResponse {
-    access_token: String,
-}
-
-/// Builds part of a standard OAuth2 authentication URI (used for providers)
-fn build_auth_uri(
-    mut uri: Parts,
-    client_id: &str,
-    root_uri: &str,
-    name: &str,
-    scopes: &str,
-) -> anyhow::Result<Uri> {
-    let pq_start = match &uri.path_and_query {
-        Some(pq) => format!("{}&", pq.as_str()),
-        None => "?".to_owned(),
-    };
-    let pq = format!(
-        "{}response_type=code&prompt=none&client_id={}&redirect_uri={}/{}-r&scope={}",
-        pq_start, client_id, root_uri, name, scopes,
-    );
-    uri.path_and_query = Some(PathAndQuery::from_maybe_shared(pq.as_str().to_owned())?);
-    Ok(Uri::from_parts(uri)?)
-}
-
 /// Adds the state and finishes a standard OAuth2 authentication URI (used for providers)
-fn finish_auth_uri(mut uri: Parts, state: &str) -> anyhow::Result<Uri> {
-    let pq = format!("{}&state={}", uri.path_and_query.as_ref().unwrap(), state);
-    uri.path_and_query = Some(PathAndQuery::from_maybe_shared(pq.as_str().to_owned())?);
-    Ok(Uri::from_parts(uri)?)
+fn finish_auth_uri(uri: &str, state: &str) -> anyhow::Result<Uri> {
+    let uri = format!("{}&state={}", uri, state);
+    Ok(Uri::from_maybe_shared(uri)?)
 }
 
 /// Creates a redirect URI for success (used for the client)

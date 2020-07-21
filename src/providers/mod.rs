@@ -5,12 +5,12 @@ pub mod google;
 pub mod microsoft;
 pub mod twitter;
 
-pub mod oauth2;
+pub mod oauth;
 
 use serde::{Deserialize, Serialize};
 
 /// Query parameters coming from the client
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Params {
     pub client_id: String,
     pub redirect_uri: String,
