@@ -99,7 +99,7 @@ async fn first_handler(
     client
         .redirect_urls
         .iter()
-        .find(|u| *u == &query.redirect_uri)
+        .find(|u| query.redirect_uri.starts_with(*u))
         .or_redirect("invalid redirect_uri", &query)?;
 
     // Encode the client id and redirect url in the state that will be sent to the provider
