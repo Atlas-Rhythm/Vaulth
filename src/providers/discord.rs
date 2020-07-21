@@ -1,5 +1,5 @@
 use crate::providers::oauth::{self, ProviderInfo, SharedResources};
-use anyhow::Result;
+use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use warp::{Filter, Rejection, Reply};
 
@@ -9,10 +9,10 @@ fn redirect_uri(root: &str) -> String {
     format!("{}/{}-r", root, NAME)
 }
 
-fn uri_fn(shared: SharedResources) -> String {
+fn uri_fn(client_id: &str, root: &str, state: &str) -> String {
     format!(
-        "https://discord.com/api/oauth2/authorize?response_type=code&scope=identify&prompt=none&client_id={}&redirect_uri={}",
-        shared.config.client_id, redirect_uri(&shared.global_config.root_uri),
+        "https://discord.com/api/oauth2/authorize?response_type=code&scope=identify&prompt=none&client_id={}&redirect_uri={}&state={}",
+        client_id, redirect_uri(&root), state,
     )
 }
 
@@ -37,12 +37,14 @@ async fn id_fn(code: String, _: String, shared: SharedResources) -> Result<Strin
         id: String,
     }
 
+    let config = shared.config.context("unsupported provider")?;
+
     let token = shared
         .http_client
         .post("https://discord.com/api/v6/oauth2/token")
         .json(&TokenRequest {
-            client_id: &shared.config.client_id,
-            client_secret: &shared.config.client_secret,
+            client_id: &config.client_id,
+            client_secret: &config.client_secret,
             grant_type: "authorization_code",
             code: &code,
             redirect_uri: &redirect_uri(&shared.global_config.root_uri),

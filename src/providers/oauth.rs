@@ -20,7 +20,7 @@ pub struct ProviderInfo<IdFnRet> {
     pub name: &'static str,
     /// Function used to start building the auth URI
     #[derivative(Debug = "ignore")]
-    pub uri_fn: fn(SharedResources) -> String,
+    pub uri_fn: fn(&str, &str, &str) -> String,
     /// Function used to obtain an ID from a provider
     #[derivative(Debug = "ignore")]
     pub id_fn: fn(String, String, SharedResources) -> IdFnRet,
@@ -41,7 +41,7 @@ impl<IdFnRet> Clone for ProviderInfo<IdFnRet> {
 #[derive(Copy, Clone, Derivative)]
 #[derivative(Debug)]
 pub struct SharedResources {
-    pub config: &'static OAuth2Config,
+    pub config: Option<&'static OAuth2Config>,
     pub global_config: &'static Config,
     #[derivative(Debug = "ignore")]
     pub http_client: &'static HttpClient,
@@ -61,12 +61,10 @@ where
 {
     tracing::debug!("generating {} handlers", provider.name);
 
-    let uri = (provider.uri_fn)(shared);
-
     let first_handler = warp::path::path(provider.name)
         .and(warp::path::end())
         .and(warp::query::query())
-        .and_then(move |query: Params| first_handler(query, shared.global_config, uri.clone()));
+        .and_then(move |query: Params| first_handler(query, provider, shared));
 
     let second_handler = warp::path::path(format!("{}-r", provider.name))
         .and(warp::path::end())
@@ -79,13 +77,14 @@ where
 /// This is where the user is redirected by the client
 /// The handler translates and stores important info, then redirects the user to the provider
 #[tracing::instrument]
-async fn first_handler(
+async fn first_handler<IdFnRet>(
     query: Params,
-    global_config: &'static Config,
-    uri: String,
+    provider: ProviderInfo<IdFnRet>,
+    shared: SharedResources,
 ) -> Result<impl Reply, Rejection> {
     // Verify the infos are valid
-    let client = global_config
+    let client = shared
+        .global_config
         .clients
         .get(&query.client_id)
         .or_redirect("invalid client_id", &query)?;
@@ -98,7 +97,20 @@ async fn first_handler(
     // Encode the client id and redirect url in the state that will be sent to the provider
     // Required to know where to forward info from the provider
     // Using a JWT for the task makes it possible to store state and provide security at the same time
-    let state = jwt::encode(query, &global_config.token).await.or_ise()?;
+    let state = jwt::encode(query.clone(), &shared.global_config.token)
+        .await
+        .or_ise()?;
+
+    // Build the auth uri
+    let uri = (provider.uri_fn)(
+        &shared
+            .config
+            .or_redirect("unsupported provider", &query)?
+            .client_id,
+        &shared.global_config.root_uri,
+        &state,
+    );
+
     Ok(warp::redirect::temporary(
         finish_auth_uri(&uri, &state).or_ise()?,
     ))

@@ -16,7 +16,6 @@ use anyhow::Result;
 use config::Config;
 use providers::oauth::SharedResources;
 use reqwest::Client as HttpClient;
-use routes::token::TokenRequestBody;
 use sqlx::Pool;
 use std::env;
 use tracing_subscriber::EnvFilter;
@@ -50,18 +49,18 @@ async fn main() -> Result<()> {
     let client = client(&config).await?;
 
     let shared = SharedResources {
-        config: config.discord.as_ref().unwrap(),
+        config: None,
         global_config: config,
         http_client: client,
         pool,
     };
 
     let routes = (providers::discord::handler(SharedResources {
-        config: config.discord.as_ref().unwrap(),
+        config: config.discord.as_ref(),
         ..shared
     })?)
     .or(providers::github::handler(SharedResources {
-        config: config.github.as_ref().unwrap(),
+        config: config.github.as_ref(),
         ..shared
     })?)
     .or(routes::token::handler(config, pool));
