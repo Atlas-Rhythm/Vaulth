@@ -64,6 +64,7 @@ async fn main() -> Result<()> {
         ..shared
     })?)
     .or(routes::token::handler(config, pool))
+    .or(routes::users::handler(config, pool))
     .or(routes::key::handler(&config.token));
 
     serve(

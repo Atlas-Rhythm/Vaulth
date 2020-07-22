@@ -27,12 +27,13 @@ pub fn handler(
     config: &'static Config,
     pool: &'static Pool<DbConnection>,
 ) -> impl Filter<Extract = (impl Reply,), Error = Rejection> + Clone + 'static {
-    (warp::path!("token")
+    let token = warp::path!("token")
         .and(warp::body::json())
-        .and_then(move |body: TokenRequestBody| token(body, config, pool)))
-    .or(warp::path!("token" / String)
+        .and_then(move |body: TokenRequestBody| token(body, config, pool));
+    let token_user = warp::path!("token" / String)
         .and(warp::body::json())
-        .and_then(move |user: String, body: TokenRequestBody| token_user(user, body, config, pool)))
+        .and_then(move |user: String, body: TokenRequestBody| token_user(user, body, config, pool));
+    (token).or(token_user)
 }
 
 #[tracing::instrument(skip(pool))]

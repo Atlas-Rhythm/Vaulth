@@ -1,7 +1,9 @@
 use crate::DbConnection;
 use chrono::{NaiveDateTime, Utc};
+use serde::Serialize;
 use sqlx::{Pool, Row};
 
+#[derive(Serialize)]
 pub struct User {
     pub id: String,
 
@@ -9,16 +11,25 @@ pub struct User {
     pub updated_at: NaiveDateTime,
     pub login_at: NaiveDateTime,
 
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub display_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub about: Option<String>,
 
+    #[serde(skip_serializing)]
     pub password: Option<String>,
 
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub google_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub microsoft_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub facebook_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub twitter_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub github_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub discord_id: Option<String>,
 }
 
