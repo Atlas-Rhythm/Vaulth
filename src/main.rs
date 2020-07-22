@@ -70,7 +70,8 @@ async fn main() -> Result<()> {
     serve(
         routes
             .recover(errors::handle_redirects)
-            .recover(errors::handle_json),
+            .recover(errors::handle_json)
+            .with(warp::trace::request()),
         &config,
     )
     .await;

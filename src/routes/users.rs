@@ -44,7 +44,7 @@ async fn me(
         JsonError {
             error: "invalid token",
         },
-        StatusCode::BAD_REQUEST,
+        StatusCode::UNAUTHORIZED,
     )?;
 
     let user = User::select(&token.sub, pool).await.or_ise()?.or_nf()?;
