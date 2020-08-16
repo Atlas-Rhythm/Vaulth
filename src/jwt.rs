@@ -18,13 +18,11 @@ struct Claims<T> {
 }
 
 /// Encodes and returns a JWT for the specified user
-#[tracing::instrument]
+#[tracing::instrument(level = "debug")]
 pub async fn encode<T>(data: T, config: &TokenConfig) -> Result<String>
 where
     T: Send + Serialize + fmt::Debug + 'static,
 {
-    tracing::debug!("encoding jwt token");
-
     let duration = Duration::minutes(config.duration);
     let key = fs::read(&config.private_key).await?;
     Ok(task::spawn_blocking(move || encode_sync(data, duration, key)).await??)
@@ -46,13 +44,11 @@ where
 }
 
 /// Decodes a JWT and returns the user it refers to if valid
-#[tracing::instrument]
+#[tracing::instrument(level = "debug")]
 pub async fn decode<T>(token: String, config: &TokenConfig) -> Result<Option<T>>
 where
     T: Send + DeserializeOwned + fmt::Debug + 'static,
 {
-    tracing::debug!("decoding jwt token");
-
     let key = fs::read(&config.public_key).await?;
     Ok(task::spawn_blocking(move || decode_sync(token, key)).await??)
 }

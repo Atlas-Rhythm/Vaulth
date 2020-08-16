@@ -4,10 +4,9 @@ use crate::{
     errors::{JsonError, TryExt},
     jwt,
     providers::{CodeJwt, TokenJwt},
-    DbConnection,
 };
 use serde::{Deserialize, Serialize};
-use sqlx::Pool;
+use sqlx::PgPool;
 use warp::{http::StatusCode, Filter, Rejection, Reply};
 
 #[derive(Debug, Deserialize)]
@@ -25,7 +24,7 @@ struct SuccessResponse {
 
 pub fn handler(
     config: &'static Config,
-    pool: &'static Pool<DbConnection>,
+    pool: &'static PgPool,
 ) -> impl Filter<Extract = (impl Reply,), Error = Rejection> + Clone + 'static {
     let token = warp::path!("token")
         .and(warp::body::json())
@@ -36,11 +35,11 @@ pub fn handler(
     (token).or(token_user)
 }
 
-#[tracing::instrument(skip(pool))]
+#[tracing::instrument(level = "debug")]
 async fn token(
     body: TokenRequestBody,
     config: &'static Config,
-    pool: &'static Pool<DbConnection>,
+    pool: &'static PgPool,
 ) -> Result<impl Reply, Rejection> {
     let code = verify(body, config).await?;
     let user: String = User::select_by_provider(&code.provider_name, &code.provider_id, pool)
@@ -53,8 +52,6 @@ async fn token(
             StatusCode::BAD_REQUEST,
         )?;
 
-    User::login(&user, pool).await.or_ise()?;
-
     let token = jwt::encode(TokenJwt { sub: user }, &config.token)
         .await
         .or_ise()?;
@@ -64,12 +61,12 @@ async fn token(
     }))
 }
 
-#[tracing::instrument(skip(pool))]
+#[tracing::instrument(level = "debug")]
 async fn token_user(
     given_user: String,
     body: TokenRequestBody,
     config: &'static Config,
-    pool: &'static Pool<DbConnection>,
+    pool: &'static PgPool,
 ) -> Result<impl Reply, Rejection> {
     let code = verify(body, config).await?;
     let user: Option<String> =
@@ -86,8 +83,6 @@ async fn token_user(
                 StatusCode::BAD_REQUEST,
             )?;
         }
-
-        User::login(&user, pool).await.or_ise()?;
 
         let token = jwt::encode(TokenJwt { sub: user }, &config.token)
             .await
@@ -117,6 +112,7 @@ async fn token_user(
     ))
 }
 
+#[tracing::instrument(level = "debug")]
 async fn verify(body: TokenRequestBody, config: &'static Config) -> Result<CodeJwt, Rejection> {
     let code: CodeJwt = jwt::decode(body.code, &config.token)
         .await

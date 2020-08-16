@@ -4,14 +4,14 @@ use crate::{
     errors::{JsonError, TryExt},
     jwt,
     providers::TokenJwt,
-    DbConnection,
 };
-use sqlx::Pool;
+use sqlx::PgPool;
 use warp::{http::StatusCode, Filter, Rejection, Reply};
 
+#[tracing::instrument(level = "debug")]
 pub fn handler(
     config: &'static Config,
-    pool: &'static Pool<DbConnection>,
+    pool: &'static PgPool,
 ) -> impl Filter<Extract = (impl Reply,), Error = Rejection> + Clone + 'static {
     let user = warp::path!("users" / String).and_then(move |id: String| user(id, pool));
     let me = warp::path!("me")
@@ -20,15 +20,17 @@ pub fn handler(
     (user).or(me)
 }
 
-async fn user(id: String, pool: &'static Pool<DbConnection>) -> Result<impl Reply, Rejection> {
+#[tracing::instrument(level = "debug")]
+async fn user(id: String, pool: &'static PgPool) -> Result<impl Reply, Rejection> {
     let user = User::select(&id, pool).await.or_ise()?.or_nf()?;
     Ok(warp::reply::json(&user))
 }
 
+#[tracing::instrument(level = "debug")]
 async fn me(
-    mut auth: String,
+    auth: String,
     config: &'static Config,
-    pool: &'static Pool<DbConnection>,
+    pool: &'static PgPool,
 ) -> Result<impl Reply, Rejection> {
     if !auth.starts_with("Bearer ") {
         None.or_json(
@@ -38,14 +40,16 @@ async fn me(
             StatusCode::BAD_REQUEST,
         )?;
     }
-    auth.replace_range(0..7, "");
 
-    let token: TokenJwt = jwt::decode(auth, &config.token).await.or_ise()?.or_json(
-        JsonError {
-            error: "invalid token",
-        },
-        StatusCode::UNAUTHORIZED,
-    )?;
+    let token: TokenJwt = jwt::decode(auth[7..].to_owned(), &config.token)
+        .await
+        .or_ise()?
+        .or_json(
+            JsonError {
+                error: "invalid token",
+            },
+            StatusCode::UNAUTHORIZED,
+        )?;
 
     let user = User::select(&token.sub, pool).await.or_ise()?.or_nf()?;
     Ok(warp::reply::json(&user))

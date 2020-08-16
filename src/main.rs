@@ -1,9 +1,3 @@
-#[cfg(any(
-    not(any(feature = "postgres", feature = "mysql")),
-    all(feature = "postgres", feature = "mysql")
-))]
-compile_error!("A single database backend must be selected");
-
 mod config;
 mod db;
 mod errors;
@@ -16,17 +10,12 @@ use anyhow::Result;
 use config::Config;
 use providers::oauth::SharedResources;
 use reqwest::Client as HttpClient;
-use sqlx::Pool;
+use sqlx::PgPool;
 use std::env;
 use tracing_subscriber::EnvFilter;
 use warp::{Filter, Reply};
 
 const LOG_ENV_VAR: &str = "VAULTH_LOG";
-
-#[cfg(feature = "postgres")]
-type DbConnection = sqlx::PgConnection;
-#[cfg(feature = "mysql")]
-type DbConnection = sqlx::MySqlConnection;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -88,18 +77,15 @@ async fn config() -> Result<&'static Config> {
     Ok(Box::leak(Box::new(config)))
 }
 
-#[tracing::instrument]
-async fn pool(config: &Config) -> Result<&'static Pool<DbConnection>> {
-    tracing::debug!("creating database connection pool");
-
-    let pool: Pool<DbConnection> = Pool::new(&config.database_url).await?;
+#[tracing::instrument(level = "debug")]
+async fn pool(config: &Config) -> Result<&'static PgPool> {
+    let pool = PgPool::connect(&config.database_url).await?;
+    sqlx::migrate!("./migrations").run(&pool).await?;
     Ok(&*Box::leak(Box::new(pool)))
 }
 
-#[tracing::instrument]
+#[tracing::instrument(level = "debug")]
 async fn client(config: &Config) -> Result<&'static HttpClient> {
-    tracing::debug!("creating http client");
-
     let client = HttpClient::builder()
         .user_agent(
             config

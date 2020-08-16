@@ -5,10 +5,8 @@ use rand::{rngs::OsRng, Rng};
 use tokio::task;
 
 /// Hashes a password
-#[tracing::instrument]
+#[tracing::instrument(level = "debug")]
 pub async fn hash(password: &str, config: &'static HashConfig) -> Result<String> {
-    tracing::debug!("hashing password");
-
     let password = password.as_bytes().to_vec();
 
     let mut argon_config = Config {
@@ -64,10 +62,8 @@ fn hash_sync<'a>(
 }
 
 /// Verifies a password hash
-#[tracing::instrument]
+#[tracing::instrument(level = "debug")]
 pub async fn verify(hash: String, password: &str, secret: &str) -> Result<bool> {
-    tracing::debug!("verifying password hash");
-
     let password = password.as_bytes().to_vec();
     let secret = secret.as_bytes().to_vec();
     Ok(task::spawn_blocking(move || verify_sync(hash, password, secret)).await??)

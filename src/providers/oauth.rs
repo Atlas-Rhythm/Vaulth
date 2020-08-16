@@ -4,11 +4,11 @@ use crate::{
     errors::TryExt,
     jwt,
     providers::{CodeJwt, Params},
-    DbConnection, HttpClient,
+    HttpClient,
 };
 use derivative::Derivative;
 use serde::Deserialize;
-use sqlx::Pool;
+use sqlx::PgPool;
 use std::future::Future;
 use warp::{http::uri::Uri, Filter, Rejection, Reply};
 
@@ -46,7 +46,7 @@ pub struct SharedResources {
     #[derivative(Debug = "ignore")]
     pub http_client: &'static HttpClient,
     #[derivative(Debug = "ignore")]
-    pub pool: &'static Pool<DbConnection>,
+    pub pool: &'static PgPool,
 }
 
 /// Generates a filter handling everything for a single provider
