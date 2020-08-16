@@ -1,3 +1,6 @@
+// lol
+#![type_length_limit = "2077914"]
+
 mod config;
 mod db;
 mod errors;

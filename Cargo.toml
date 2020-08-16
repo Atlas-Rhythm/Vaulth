@@ -16,7 +16,7 @@ reqwest = { version = "0.10.7", features = ["json"] }
 rust-argon2 = "0.8.2"
 serde = { version = "1.0.115", features = ["derive"] }
 serde_json = "1.0.57"
-sqlx = { version = "0.4.0-beta.1", features = ["chrono", "macros", "migrate", "postgres", "runtime-tokio"], default-features = false }
+sqlx = { version = "0.4.0-beta.1", features = ["chrono", "macros", "migrate", "offline", "postgres", "runtime-tokio"], default-features = false }
 tokio = { version = "0.2.22", features = ["blocking", "fs", "macros", "rt-threaded"] }
 tracing = "0.1.19"
 tracing-futures = "0.2.4"

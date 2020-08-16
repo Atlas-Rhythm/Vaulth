@@ -1,0 +1,175 @@
+{
+  "db": "PostgreSQL",
+  "b83c6c37b836034d093eb2b4f2af48b5c3a71c5fc05df3066998cce44802c7a3": {
+    "query": "DELETE FROM vaulth WHERE id = $1 RETURNING *",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Varchar"
+        },
+        {
+          "ordinal": 1,
+          "name": "inserted_at",
+          "type_info": "Timestamptz"
+        },
+        {
+          "ordinal": 2,
+          "name": "updated_at",
+          "type_info": "Timestamptz"
+        },
+        {
+          "ordinal": 3,
+          "name": "name",
+          "type_info": "Varchar"
+        },
+        {
+          "ordinal": 4,
+          "name": "about",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 5,
+          "name": "password",
+          "type_info": "Varchar"
+        },
+        {
+          "ordinal": 6,
+          "name": "google_id",
+          "type_info": "Varchar"
+        },
+        {
+          "ordinal": 7,
+          "name": "microsoft_id",
+          "type_info": "Varchar"
+        },
+        {
+          "ordinal": 8,
+          "name": "facebook_id",
+          "type_info": "Varchar"
+        },
+        {
+          "ordinal": 9,
+          "name": "twitter_id",
+          "type_info": "Varchar"
+        },
+        {
+          "ordinal": 10,
+          "name": "github_id",
+          "type_info": "Varchar"
+        },
+        {
+          "ordinal": 11,
+          "name": "discord_id",
+          "type_info": "Varchar"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      },
+      "nullable": [
+        false,
+        false,
+        false,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ]
+    }
+  },
+  "e9d089cc6d6af033a51d00e46fec5ef5fd86dd0579bb50b54c0ecc1ea737f86d": {
+    "query": "SELECT * FROM vaulth WHERE id = $1",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "id",
+          "type_info": "Varchar"
+        },
+        {
+          "ordinal": 1,
+          "name": "inserted_at",
+          "type_info": "Timestamptz"
+        },
+        {
+          "ordinal": 2,
+          "name": "updated_at",
+          "type_info": "Timestamptz"
+        },
+        {
+          "ordinal": 3,
+          "name": "name",
+          "type_info": "Varchar"
+        },
+        {
+          "ordinal": 4,
+          "name": "about",
+          "type_info": "Text"
+        },
+        {
+          "ordinal": 5,
+          "name": "password",
+          "type_info": "Varchar"
+        },
+        {
+          "ordinal": 6,
+          "name": "google_id",
+          "type_info": "Varchar"
+        },
+        {
+          "ordinal": 7,
+          "name": "microsoft_id",
+          "type_info": "Varchar"
+        },
+        {
+          "ordinal": 8,
+          "name": "facebook_id",
+          "type_info": "Varchar"
+        },
+        {
+          "ordinal": 9,
+          "name": "twitter_id",
+          "type_info": "Varchar"
+        },
+        {
+          "ordinal": 10,
+          "name": "github_id",
+          "type_info": "Varchar"
+        },
+        {
+          "ordinal": 11,
+          "name": "discord_id",
+          "type_info": "Varchar"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      },
+      "nullable": [
+        false,
+        false,
+        false,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ]
+    }
+  }
+}
